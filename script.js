@@ -1,7 +1,7 @@
 // API 기본 URL 설정
 const API_BASE_URL =
     window.location.hostname === "nahyeonsong.github.io"
-        ? "https://bariosk-backend.herokuapp.com"
+        ? "https://bariosk.onrender.com"
         : "http://localhost:5000";
 
 // 전역 변수
