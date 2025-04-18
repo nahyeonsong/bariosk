@@ -11,7 +11,6 @@ let menuData = {};
 
 // DOM이 로드되면 실행
 document.addEventListener("DOMContentLoaded", () => {
-    const adminToggle = document.getElementById("adminToggle");
     const adminPanel = document.getElementById("adminPanel");
     const addMenuForm = document.getElementById("addMenuForm");
     const editMenuForm = document.getElementById("editMenuForm");
@@ -20,6 +19,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const categoryList = document.getElementById("categoryList");
     const tabButtons = document.querySelectorAll(".tab-btn");
     const tabContents = document.querySelectorAll(".tab-content");
+    const logo = document.getElementById("logo");
+    let pressTimer;
 
     // 탭 전환
     tabButtons.forEach((button) => {
@@ -38,12 +39,43 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 관리자 모드 토글 이벤트 리스너
-    adminToggle.addEventListener("click", () => {
-        isAdminMode = !isAdminMode;
-        adminPanel.style.display = isAdminMode ? "block" : "none";
-        adminToggle.textContent = isAdminMode ? "일반 모드" : "관리자 모드";
-        loadMenuData();
+    // 로고 길게 누르기 이벤트 설정
+    logo.addEventListener("mousedown", function () {
+        pressTimer = setTimeout(function () {
+            isAdminMode = !isAdminMode;
+            if (adminPanel) {
+                adminPanel.style.display = isAdminMode ? "block" : "none";
+                // 관리자 모드 상태에 따라 로고 스타일 변경
+                logo.style.border = isAdminMode ? "2px solid red" : "none";
+                logo.style.padding = isAdminMode ? "2px" : "0";
+            }
+        }, 3000); // 3초
+    });
+
+    logo.addEventListener("mouseup", function () {
+        clearTimeout(pressTimer);
+    });
+
+    logo.addEventListener("mouseleave", function () {
+        clearTimeout(pressTimer);
+    });
+
+    // 터치 이벤트도 추가 (모바일 지원)
+    logo.addEventListener("touchstart", function (e) {
+        e.preventDefault(); // 기본 스크롤 동작 방지
+        pressTimer = setTimeout(function () {
+            isAdminMode = !isAdminMode;
+            if (adminPanel) {
+                adminPanel.style.display = isAdminMode ? "block" : "none";
+                // 관리자 모드 상태에 따라 로고 스타일 변경
+                logo.style.border = isAdminMode ? "2px solid red" : "none";
+                logo.style.padding = isAdminMode ? "2px" : "0";
+            }
+        }, 3000);
+    });
+
+    logo.addEventListener("touchend", function () {
+        clearTimeout(pressTimer);
     });
 
     // 초기 메뉴 데이터 로드
@@ -167,50 +199,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // 메뉴 아이템에 장바구니 추가 버튼 이벤트 리스너 추가
     addMenuEventListeners();
     updateCart();
-
-    // 로고 길게 누르기 이벤트 설정
-    const logo = document.getElementById("logo");
-    let pressTimer;
-
-    logo.addEventListener("mousedown", function () {
-        pressTimer = setTimeout(function () {
-            isAdminMode = !isAdminMode;
-            const adminPanel = document.getElementById("adminPanel");
-            if (adminPanel) {
-                adminPanel.style.display = isAdminMode ? "block" : "none";
-                // 관리자 모드 상태에 따라 로고 스타일 변경
-                logo.style.border = isAdminMode ? "2px solid red" : "none";
-                logo.style.padding = isAdminMode ? "2px" : "0";
-            }
-        }, 3000); // 3초
-    });
-
-    logo.addEventListener("mouseup", function () {
-        clearTimeout(pressTimer);
-    });
-
-    logo.addEventListener("mouseleave", function () {
-        clearTimeout(pressTimer);
-    });
-
-    // 터치 이벤트도 추가 (모바일 지원)
-    logo.addEventListener("touchstart", function (e) {
-        e.preventDefault(); // 기본 스크롤 동작 방지
-        pressTimer = setTimeout(function () {
-            isAdminMode = !isAdminMode;
-            const adminPanel = document.getElementById("adminPanel");
-            if (adminPanel) {
-                adminPanel.style.display = isAdminMode ? "block" : "none";
-                // 관리자 모드 상태에 따라 로고 스타일 변경
-                logo.style.border = isAdminMode ? "2px solid red" : "none";
-                logo.style.padding = isAdminMode ? "2px" : "0";
-            }
-        }, 3000);
-    });
-
-    logo.addEventListener("touchend", function () {
-        clearTimeout(pressTimer);
-    });
 });
 
 // 카테고리 목록 로드

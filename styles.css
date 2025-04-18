@@ -15,7 +15,9 @@ header {
     background-color: #fff;
     padding: 1rem;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 .header-content {
@@ -24,9 +26,8 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 2rem;
-    background-color: #fff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    flex-wrap: wrap;
+    gap: 1rem;
 }
 
 .header-right {
@@ -37,7 +38,7 @@ header {
 
 h1 {
     margin: 0;
-    font-size: 1.8rem;
+    font-size: 1.5rem;
     color: #333;
 }
 
@@ -71,8 +72,8 @@ h1 {
 
 main {
     max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 2rem;
+    margin: 2rem auto;
+    padding: 0 1rem;
 }
 
 .menu-container {
@@ -82,21 +83,25 @@ main {
 }
 
 .menu-section {
-    background: #fff;
-    padding: 2rem;
-    border-radius: 1rem;
-    box-shadow: 0 0 1rem rgba(0, 0, 0, 0.1);
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
 }
 
 .menu-section h2 {
-    margin-bottom: 1rem;
+    font-size: 1.5rem;
     color: #333;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #eee;
 }
 
 .menu-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.5rem;
 }
 
 .menu-item {
@@ -104,11 +109,11 @@ main {
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s;
+    transition: transform 0.3s ease;
 }
 
 .menu-item:hover {
-    transform: translateY(-4px);
+    transform: translateY(-5px);
 }
 
 .menu-item img {
@@ -220,10 +225,10 @@ main {
 
 .admin-panel {
     background-color: #fff;
+    padding: 1.5rem;
     border-radius: 8px;
-    padding: 2rem;
-    margin-top: 2rem;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-top: 2rem;
 }
 
 .admin-panel h2 {
@@ -238,7 +243,7 @@ main {
 .form-group label {
     display: block;
     margin-bottom: 0.5rem;
-    color: #666;
+    color: #333;
 }
 
 .form-group input,
@@ -267,8 +272,10 @@ button[type="submit"]:hover {
 
 .admin-tabs {
     display: flex;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid #ddd;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1rem;
 }
 
 .tab-btn {
@@ -278,12 +285,12 @@ button[type="submit"]:hover {
     cursor: pointer;
     font-size: 1rem;
     color: #666;
-    border-bottom: 2px solid transparent;
+    transition: color 0.3s;
 }
 
 .tab-btn.active {
-    color: #333;
-    border-bottom-color: #4caf50;
+    color: #4caf50;
+    font-weight: bold;
 }
 
 .tab-content {
@@ -305,7 +312,6 @@ button[type="submit"]:hover {
 
 #categoryList {
     list-style: none;
-    padding: 0;
 }
 
 #categoryList li {
@@ -327,31 +333,38 @@ button[type="submit"]:hover {
 
 .category-actions button {
     padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
 }
 
-.edit-category-input {
-    padding: 0.25rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    margin-right: 0.5rem;
+.category-actions button:first-child {
+    background-color: #4caf50;
+    color: white;
+}
+
+.category-actions button:last-child {
+    background-color: #f44336;
+    color: white;
 }
 
 .cart-section {
-    background: #fff;
+    background-color: #fff;
     padding: 1rem;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    min-width: 300px;
+    min-width: 250px;
 }
 
 .cart-section h2 {
-    margin-bottom: 1rem;
     font-size: 1.2rem;
+    margin-bottom: 1rem;
+    color: #333;
 }
 
 #cartItems {
-    max-height: 300px;
+    max-height: 200px;
     overflow-y: auto;
     margin-bottom: 1rem;
 }
@@ -412,24 +425,19 @@ button[type="submit"]:hover {
 .cart-total {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    font-size: 1.2rem;
     font-weight: bold;
-    border-top: 2px solid #eee;
-    margin-top: 1rem;
+    margin: 1rem 0;
 }
 
 .checkout-btn {
     width: 100%;
-    padding: 1rem;
-    background: #4caf50;
+    padding: 0.5rem;
+    background-color: #4caf50;
     color: white;
     border: none;
-    border-radius: 0.5rem;
-    font-size: 1.1rem;
+    border-radius: 4px;
     cursor: pointer;
-    margin-top: 1rem;
+    transition: background-color 0.3s;
 }
 
 .checkout-btn:hover {
