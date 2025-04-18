@@ -402,7 +402,7 @@ function updateMenuDisplay() {
             const menuItem = document.createElement("div");
             menuItem.className = "menu-item";
             menuItem.innerHTML = `
-                <img src="${menu.image}" alt="${menu.name}">
+                <img src="static/images/${menu.image}" alt="${menu.name}">
                 <h3>${menu.name}</h3>
                 <p>${menu.price}원</p>
                 <button onclick="addToCart(${menu.id}, '${category}', '${menu.name}', ${menu.price})">장바구니에 추가</button>
