@@ -25,37 +25,14 @@ def allowed_file(filename):
 MENU_DATA_FILE = 'menu_data.json'
 
 def load_menu_data():
-    try:
-        with open('menu_data.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            print("Loaded menu data:", data)  # 디버깅용
-            return data
-    except FileNotFoundError:
-        print("menu_data.json not found, creating default data")  # 디버깅용
-        default_data = {
-            "커피": [
-                {"id": 1, "name": "아메리카노", "price": 3000, "image": "americano.jpg"},
-                {"id": 2, "name": "카페라떼", "price": 4000, "image": "cafelatte.jpg"}
-            ],
-            "차": [
-                {"id": 3, "name": "그린티", "price": 3500, "image": "greentea.jpg"},
-                {"id": 4, "name": "캐모마일", "price": 3500, "image": "chamomile.jpg"}
-            ]
-        }
-        with open('menu_data.json', 'w', encoding='utf-8') as f:
-            json.dump(default_data, f, ensure_ascii=False, indent=4)
-        return default_data
-    except Exception as e:
-        print(f"Error loading menu data: {str(e)}")  # 디버깅용
-        return {}
+    if not os.path.exists(MENU_DATA_FILE):
+        initialize_menu_data()
+    with open(MENU_DATA_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 def save_menu_data(data):
-    try:
-        with open('menu_data.json', 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        print("Menu data saved successfully")  # 디버깅용
-    except Exception as e:
-        print(f"Error saving menu data: {str(e)}")  # 디버깅용
+    with open(MENU_DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 def save_image(file):
     try:
@@ -106,76 +83,46 @@ def get_menu():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/menu', methods=['POST'])
-def add_menu_item():
+def add_menu():
     try:
-        # 이미지 파일 처리
-        if 'image' not in request.files:
-            return jsonify({'error': '이미지 파일이 필요합니다'}), 400
-            
-        image_file = request.files['image']
-        if image_file.filename == '':
-            return jsonify({'error': '선택된 파일이 없습니다'}), 400
-            
-        # 이미지 형식 확인
-        image = Image.open(image_file)
-        image_format = image.format
-        print(f"이미지 형식: {image_format}")
-        
-        # 이미지 저장
-        filename = str(uuid.uuid4()) + '.jpg'
-        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        image.convert('RGB').save(image_path, 'JPEG', quality=85)
-        print(f"이미지 저장됨: {image_path}")
-        
-        # 메뉴 데이터 로드
         menu_data = load_menu_data()
-        print("현재 메뉴 데이터:", menu_data)
         
-        # 새로운 메뉴 정보
+        # 폼 데이터에서 정보 추출
         category = request.form.get('category')
         name = request.form.get('name')
-        price = request.form.get('price')
+        price = int(request.form.get('price'))
+        image_file = request.files.get('image')
         
-        print(f"카테고리: {category}, 이름: {name}, 가격: {price}")
+        if not all([category, name, price, image_file]):
+            return jsonify({'error': '모든 필드를 입력해주세요'}), 400
         
-        if not all([category, name, price]):
-            return jsonify({'error': '필수 정보가 누락되었습니다.'}), 400
+        # 이미지 저장
+        image_filename = save_image(image_file)
         
-        # 카테고리가 없으면 생성
+        # 새 메뉴 ID 생성
+        new_id = generate_new_menu_id(menu_data)
+        
+        # 새 메뉴 항목 생성
+        new_item = {
+            'id': new_id,
+            'name': name,
+            'price': price,
+            'image': image_filename
+        }
+        
+        # 카테고리가 없으면 새로 생성
         if category not in menu_data:
             menu_data[category] = []
-            print(f"새 카테고리 생성: {category}")
         
-        try:
-            # 새 메뉴 ID 생성
-            new_id = 1
-            if menu_data[category]:
-                new_id = max(menu['id'] for menu in menu_data[category]) + 1
-            
-            # 새 메뉴 추가
-            new_menu = {
-                'id': new_id,
-                'name': name,
-                'price': price,
-                'image': f'/static/images/{filename}'  # 이미지 경로 수정
-            }
-            
-            print(f"추가할 메뉴: {new_menu}")
-            menu_data[category].append(new_menu)
-            save_menu_data(menu_data)
-            
-            return jsonify(new_menu), 201
-            
-        except ValueError as ve:
-            return jsonify({'error': str(ve)}), 400
-        except Exception as e:
-            print(f"이미지 처리 중 오류 발생: {str(e)}")
-            return jsonify({'error': f'이미지 처리 중 오류가 발생했습니다: {str(e)}'}), 500
-            
+        # 메뉴 추가
+        menu_data[category].append(new_item)
+        
+        # 데이터 저장
+        save_menu_data(menu_data)
+        
+        return jsonify({'message': '메뉴가 추가되었습니다'}), 201
+    
     except Exception as e:
-        print(f"메뉴 추가 중 오류 발생: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/menu/<category>/<int:menu_id>', methods=['PUT'])
@@ -230,6 +177,39 @@ def update_menu(category, menu_id):
         return jsonify(menu)
     except Exception as e:
         print(f"메뉴 수정 중 오류 발생: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/menu/<category>/<int:menu_id>', methods=['DELETE'])
+def delete_menu(category, menu_id):
+    try:
+        menu_data = load_menu_data()
+        
+        if category not in menu_data:
+            return jsonify({'error': '존재하지 않는 카테고리입니다.'}), 404
+        
+        # 메뉴 찾기
+        menu_index = next((index for (index, d) in enumerate(menu_data[category]) if d['id'] == menu_id), None)
+        if menu_index is None:
+            return jsonify({'error': '존재하지 않는 메뉴입니다.'}), 404
+        
+        # 이미지 파일 삭제
+        menu = menu_data[category][menu_index]
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], menu['image'])
+        if os.path.exists(image_path):
+            os.remove(image_path)
+        
+        # 메뉴 삭제
+        menu_data[category].pop(menu_index)
+        
+        # 빈 카테고리 제거
+        if not menu_data[category]:
+            del menu_data[category]
+        
+        save_menu_data(menu_data)
+        return jsonify({'message': '메뉴가 삭제되었습니다.'}), 200
+        
+    except Exception as e:
+        print(f"메뉴 삭제 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/static/images/<filename>')
@@ -317,6 +297,15 @@ def update_category(category_name):
     except Exception as e:
         print(f"카테고리 수정 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# 새로운 메뉴 ID 생성
+def generate_new_menu_id(menu_data):
+    max_id = 0
+    for category in menu_data.values():
+        for item in category:
+            if item['id'] > max_id:
+                max_id = item['id']
+    return max_id + 1
 
 if __name__ == '__main__':
     # 서버 시작 시 static/images 디렉토리 확인

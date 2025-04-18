@@ -42,13 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // 로고 길게 누르기 이벤트 설정
     logo.addEventListener("mousedown", function () {
         pressTimer = setTimeout(function () {
-            isAdminMode = !isAdminMode;
-            if (adminPanel) {
-                adminPanel.style.display = isAdminMode ? "block" : "none";
-                // 관리자 모드 상태에 따라 로고 스타일 변경
-                logo.style.border = isAdminMode ? "2px solid red" : "none";
-                logo.style.padding = isAdminMode ? "2px" : "0";
-            }
+            toggleAdminMode();
         }, 3000); // 3초
     });
 
@@ -64,13 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
     logo.addEventListener("touchstart", function (e) {
         e.preventDefault(); // 기본 스크롤 동작 방지
         pressTimer = setTimeout(function () {
-            isAdminMode = !isAdminMode;
-            if (adminPanel) {
-                adminPanel.style.display = isAdminMode ? "block" : "none";
-                // 관리자 모드 상태에 따라 로고 스타일 변경
-                logo.style.border = isAdminMode ? "2px solid red" : "none";
-                logo.style.padding = isAdminMode ? "2px" : "0";
-            }
+            toggleAdminMode();
         }, 3000);
     });
 
@@ -437,7 +425,11 @@ function updateMenuDisplay() {
                 <img src="static/images/${menu.image}" alt="${menu.name}">
                 <h3>${menu.name}</h3>
                 <p>${menu.price}원</p>
-                <button onclick="addToCart(${menu.id}, '${category}', '${menu.name}', ${menu.price})">장바구니에 추가</button>
+                ${
+                    isAdminMode
+                        ? `<button class="edit-menu-btn" data-id="${menu.id}" data-category="${category}">수정</button>`
+                        : `<button class="add-to-cart-btn" data-id="${menu.id}">장바구니에 추가</button>`
+                }
             `;
             menuGrid.appendChild(menuItem);
         });
@@ -445,6 +437,50 @@ function updateMenuDisplay() {
         categorySection.appendChild(menuGrid);
         menuContainer.appendChild(categorySection);
     }
+
+    // 이벤트 리스너 추가
+    if (isAdminMode) {
+        // 수정 버튼 클릭 이벤트
+        document.querySelectorAll(".edit-menu-btn").forEach((button) => {
+            button.addEventListener("click", () => {
+                const menuId = button.getAttribute("data-id");
+                const category = button.getAttribute("data-category");
+                const menu = menuData[category].find(
+                    (item) => item.id === parseInt(menuId)
+                );
+                if (menu) {
+                    showEditForm(menu, category);
+                }
+            });
+        });
+    } else {
+        // 장바구니 추가 버튼 클릭 이벤트
+        document.querySelectorAll(".add-to-cart-btn").forEach((button) => {
+            button.addEventListener("click", () => {
+                const menuId = button.getAttribute("data-id");
+                addToCart(parseInt(menuId));
+            });
+        });
+    }
+}
+
+// 관리자 모드 토글 시 메뉴 표시 업데이트
+function toggleAdminMode() {
+    isAdminMode = !isAdminMode;
+    const adminPanel = document.getElementById("adminPanel");
+    const logo = document.getElementById("logo");
+
+    if (adminPanel) {
+        adminPanel.style.display = isAdminMode ? "block" : "none";
+    }
+
+    if (logo) {
+        logo.style.border = isAdminMode ? "2px solid red" : "none";
+        logo.style.padding = isAdminMode ? "2px" : "0";
+    }
+
+    // 메뉴 표시 업데이트
+    updateMenuDisplay();
 }
 
 // 메뉴 아이템 생성
@@ -483,12 +519,38 @@ function showEditForm(menu, category) {
     const editName = document.getElementById("editName");
     const editPrice = document.getElementById("editPrice");
     const editImage = document.getElementById("editImage");
+    const deleteMenuBtn = document.getElementById("deleteMenu");
 
     editMenuId.value = menu.id;
     editCategory.value = category;
     editName.value = menu.name;
     editPrice.value = menu.price;
     editImage.value = ""; // 이미지 입력 필드 초기화
+
+    // 삭제 버튼에 이벤트 리스너 추가
+    deleteMenuBtn.onclick = async () => {
+        if (confirm(`정말로 "${menu.name}" 메뉴를 삭제하시겠습니까?`)) {
+            try {
+                const response = await fetch(
+                    `${API_BASE_URL}/api/menu/${category}/${menu.id}`,
+                    {
+                        method: "DELETE",
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error("메뉴 삭제 실패");
+                }
+
+                editForm.style.display = "none";
+                loadMenuData();
+                alert("메뉴가 삭제되었습니다.");
+            } catch (error) {
+                console.error("Error:", error);
+                alert("메뉴 삭제 중 오류가 발생했습니다: " + error.message);
+            }
+        }
+    };
 
     editForm.style.display = "block";
     editForm.scrollIntoView({ behavior: "smooth" });
