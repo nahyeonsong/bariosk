@@ -379,20 +379,25 @@ function updateMenuDisplay() {
         return;
     }
 
+    // 메뉴 컨테이너 초기화
     menuContainer.innerHTML = "";
 
+    // 각 카테고리별로 메뉴 섹션 생성
     for (const category in menuData) {
         const categorySection = document.createElement("div");
         categorySection.className = "menu-section";
         categorySection.id = `category-${category}`;
 
+        // 카테고리 제목
         const categoryTitle = document.createElement("h2");
         categoryTitle.textContent = category;
         categorySection.appendChild(categoryTitle);
 
+        // 메뉴 그리드 생성
         const menuGrid = document.createElement("div");
         menuGrid.className = "menu-grid";
 
+        // 각 메뉴 아이템 추가
         menuData[category].forEach((menu) => {
             const menuItem = document.createElement("div");
             menuItem.className = "menu-item";
