@@ -1,0 +1,20 @@
+{
+    "name": "bariosk",
+    "version": "1.0.0",
+    "description": "Bariosk Cafe Menu Management System",
+    "main": "index.js",
+    "scripts": {
+        "build": "echo 'No build step required'",
+        "test": "echo 'No tests specified'"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/nahyeonsong/bariosk.git"
+    },
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/nahyeonsong/bariosk/issues"
+    },
+    "homepage": "https://nahyeonsong.github.io/bariosk"
+}
