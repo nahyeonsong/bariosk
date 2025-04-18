@@ -232,7 +232,7 @@ def update_menu(category, menu_id):
         print(f"메뉴 수정 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/static/images/<filename>')
+@app.route('static/images/<filename>')
 def serve_image(filename):
     try:
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
