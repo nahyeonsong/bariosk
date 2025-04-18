@@ -26,18 +26,37 @@ def allowed_file(filename):
 MENU_DATA_FILE = 'menu_data.json'
 
 def load_menu_data():
-    if os.path.exists(MENU_DATA_FILE):
-        with open(MENU_DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {
-        'main': [],
-        'side': [],
-        'drink': []
-    }
+    try:
+        with open('menu_data.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            print("Loaded menu data:", data)  # 디버깅용
+            return data
+    except FileNotFoundError:
+        print("menu_data.json not found, creating default data")  # 디버깅용
+        default_data = {
+            "커피": [
+                {"id": 1, "name": "아메리카노", "price": 3000, "image": "americano.jpg"},
+                {"id": 2, "name": "카페라떼", "price": 4000, "image": "cafelatte.jpg"}
+            ],
+            "차": [
+                {"id": 3, "name": "그린티", "price": 3500, "image": "greentea.jpg"},
+                {"id": 4, "name": "캐모마일", "price": 3500, "image": "chamomile.jpg"}
+            ]
+        }
+        with open('menu_data.json', 'w', encoding='utf-8') as f:
+            json.dump(default_data, f, ensure_ascii=False, indent=4)
+        return default_data
+    except Exception as e:
+        print(f"Error loading menu data: {str(e)}")  # 디버깅용
+        return {}
 
 def save_menu_data(data):
-    with open(MENU_DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        with open('menu_data.json', 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        print("Menu data saved successfully")  # 디버깅용
+    except Exception as e:
+        print(f"Error saving menu data: {str(e)}")  # 디버깅용
 
 def save_image(file):
     try:
@@ -81,13 +100,11 @@ def save_image(file):
 def get_menu():
     try:
         menu_data = load_menu_data()
-        print("현재 메뉴 데이터:", menu_data)  # 디버깅용 로그
+        print("Sending menu data:", menu_data)  # 디버깅용
         return jsonify(menu_data)
     except Exception as e:
-        print(f"메뉴 데이터 로드 중 오류 발생: {str(e)}")  # 디버깅용 로그
-        import traceback
-        print(traceback.format_exc())  # 전체 스택 트레이스 출력
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in get_menu: {str(e)}")  # 디버깅용
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/menu', methods=['POST'])
 def add_menu():
@@ -178,6 +195,7 @@ def update_menu(category, menu_id):
         # 업데이트할 정보
         name = request.form.get('name', menu['name'])
         price = request.form.get('price', menu['price'])
+        new_category = request.form.get('category', category)
         
         # 이미지 업데이트
         if 'image' in request.files:
@@ -196,10 +214,21 @@ def update_menu(category, menu_id):
         menu['name'] = name
         menu['price'] = price
         
+        # 카테고리가 변경된 경우
+        if new_category != category:
+            # 기존 카테고리에서 메뉴 제거
+            menu_data[category].pop(menu_index)
+            # 새 카테고리에 메뉴 추가
+            if new_category not in menu_data:
+                menu_data[new_category] = []
+            menu_data[new_category].append(menu)
+        else:
+            menu_data[category][menu_index] = menu
+        
         save_menu_data(menu_data)
         return jsonify(menu)
     except Exception as e:
-        print(f"메뉴 수정 중 오류 발생: {str(e)}")  # 디버깅용 로그
+        print(f"메뉴 수정 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/static/images/<filename>')
@@ -255,6 +284,37 @@ def delete_category(category_name):
         
     except Exception as e:
         print(f"카테고리 삭제 중 오류 발생: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/categories/<category_name>', methods=['PUT'])
+def update_category(category_name):
+    try:
+        new_name = request.json.get('name')
+        if not new_name:
+            return jsonify({'error': '카테고리 이름이 필요합니다'}), 400
+
+        # 메뉴 데이터 로드
+        menu_data = load_menu_data()
+
+        # 카테고리가 존재하는지 확인
+        if category_name not in menu_data:
+            return jsonify({'error': '카테고리가 존재하지 않습니다'}), 404
+
+        # 새 이름이 현재 이름과 같으면 아무것도 하지 않음
+        if new_name == category_name:
+            return jsonify({'message': '카테고리 이름이 변경되지 않았습니다'}), 200
+
+        # 새 이름이 이미 존재하는 경우
+        if new_name in menu_data:
+            return jsonify({'message': '이미 존재하는 카테고리 이름입니다'}), 200
+
+        # 카테고리 이름 변경
+        menu_data[new_name] = menu_data.pop(category_name)
+        save_menu_data(menu_data)
+
+        return jsonify({'message': '카테고리가 수정되었습니다'}), 200
+    except Exception as e:
+        print(f"카테고리 수정 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

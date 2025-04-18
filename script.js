@@ -3,6 +3,8 @@ const API_BASE_URL = "http://localhost:5000";
 
 // 전역 변수
 let isAdminMode = false;
+let cart = [];
+let menuData = {};
 
 // DOM이 로드되면 실행
 document.addEventListener("DOMContentLoaded", () => {
@@ -33,20 +35,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 관리자 패널 토글
+    // 관리자 모드 토글 이벤트 리스너
     adminToggle.addEventListener("click", () => {
         isAdminMode = !isAdminMode;
         adminPanel.style.display = isAdminMode ? "block" : "none";
         adminToggle.textContent = isAdminMode ? "일반 모드" : "관리자 모드";
-
-        // 메뉴 수정 버튼 표시/숨김
-        const editButtons = document.querySelectorAll(".edit-menu-btn");
-        editButtons.forEach((button) => {
-            button.style.display = isAdminMode ? "block" : "none";
-        });
+        loadMenuData();
     });
 
-    // 메뉴 데이터 로드
+    // 초기 메뉴 데이터 로드
     loadMenuData();
 
     // 카테고리 목록 로드
@@ -163,6 +160,10 @@ document.addEventListener("DOMContentLoaded", () => {
         editMenuForm.reset();
         editMenuForm.style.display = "none";
     });
+
+    // 메뉴 아이템에 장바구니 추가 버튼 이벤트 리스너 추가
+    addMenuEventListeners();
+    updateCart();
 });
 
 // 카테고리 목록 로드
@@ -351,87 +352,85 @@ function renderCategoryList(categories) {
     });
 }
 
-// 메뉴 데이터 로드 및 렌더링
+// 메뉴 데이터 로드
 async function loadMenuData() {
     try {
         const response = await fetch(`${API_BASE_URL}/api/menu`);
         if (!response.ok) {
-            throw new Error("메뉴 데이터 로드 실패");
+            throw new Error("메뉴 데이터를 불러오는데 실패했습니다.");
         }
-
-        const menuData = await response.json();
-        renderMenu(menuData);
+        menuData = await response.json();
+        console.log("Loaded menu data:", menuData); // 디버깅용
+        updateMenuDisplay();
     } catch (error) {
-        console.error("Error:", error);
-        if (error.message.includes("Failed to fetch")) {
-            alert(
-                "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
-            );
-        } else {
-            alert(
-                "메뉴 데이터를 불러오는 중 오류가 발생했습니다: " +
-                    error.message
-            );
-        }
+        console.error("Error loading menu data:", error);
+        alert("메뉴 데이터를 불러오는데 실패했습니다.");
     }
 }
 
-// 메뉴 렌더링
-function renderMenu(menuData) {
-    const menuContainer = document.querySelector(".menu-container");
-    menuContainer.innerHTML = "";
+// 메뉴 표시 업데이트
+function updateMenuDisplay() {
+    console.log("Updating menu display with:", menuData); // 디버깅용
 
+    // 모든 메뉴 섹션 숨기기
+    document.querySelectorAll(".menu-section").forEach((section) => {
+        section.style.display = "none";
+    });
+
+    // 각 카테고리별로 메뉴 표시
     for (const [category, items] of Object.entries(menuData)) {
-        const menuSection = document.createElement("div");
-        menuSection.className = "menu-section";
-        menuSection.id = category;
+        const sectionId = `${category}-menu`;
+        let section = document.getElementById(sectionId);
 
-        const sectionTitle = document.createElement("h2");
-        sectionTitle.textContent = category;
-        menuSection.appendChild(sectionTitle);
+        if (!section) {
+            // 섹션이 없으면 생성
+            section = document.createElement("div");
+            section.id = sectionId;
+            section.className = "menu-section";
+            section.innerHTML = `
+                <h2>${category}</h2>
+                <div class="menu-grid"></div>
+            `;
+            document.querySelector(".menu-container").appendChild(section);
+        }
 
-        const menuGrid = document.createElement("div");
-        menuGrid.className = "menu-grid";
+        section.style.display = "block";
+        const menuGrid = section.querySelector(".menu-grid");
+        menuGrid.innerHTML = "";
 
         items.forEach((item) => {
-            const menuItem = document.createElement("div");
-            menuItem.className = "menu-item";
-            menuItem.dataset.id = item.id;
-            menuItem.dataset.category = category;
-
-            const img = document.createElement("img");
-            img.src = `/static/images/${item.image}`;
-            img.alt = item.name;
-
-            const itemInfo = document.createElement("div");
-            itemInfo.className = "menu-item-info";
-
-            const name = document.createElement("h3");
-            name.textContent = item.name;
-
-            const price = document.createElement("p");
-            price.textContent = `${item.price.toLocaleString()}원`;
-
-            const editButton = document.createElement("button");
-            editButton.className = "edit-menu-btn";
-            editButton.textContent = "수정";
-            editButton.style.display = isAdminMode ? "block" : "none";
-            editButton.addEventListener("click", () => {
-                showEditForm(item, category);
-            });
-
-            itemInfo.appendChild(name);
-            itemInfo.appendChild(price);
-            itemInfo.appendChild(editButton);
-
-            menuItem.appendChild(img);
-            menuItem.appendChild(itemInfo);
+            const menuItem = createMenuItem(item);
             menuGrid.appendChild(menuItem);
         });
-
-        menuSection.appendChild(menuGrid);
-        menuContainer.appendChild(menuSection);
     }
+}
+
+// 메뉴 아이템 생성
+function createMenuItem(item) {
+    const menuItem = document.createElement("div");
+    menuItem.className = "menu-item";
+    menuItem.dataset.id = item.id;
+
+    const buttonText = isAdminMode ? "수정" : "담기";
+    const buttonClass = isAdminMode ? "edit-menu-btn" : "add-to-cart";
+
+    menuItem.innerHTML = `
+        <img src="/static/images/${item.image}" alt="${item.name}">
+        <div class="menu-item-info">
+            <h3>${item.name}</h3>
+            <p>${item.price.toLocaleString()}원</p>
+            <button class="${buttonClass}">${buttonText}</button>
+        </div>
+    `;
+
+    const button = menuItem.querySelector("button");
+    if (isAdminMode) {
+        button.addEventListener("click", () => showEditForm(item));
+    } else {
+        button.addEventListener("click", () => addToCart(item.id));
+    }
+
+    return menuItem;
 }
 
 // 수정 폼 표시
@@ -451,4 +450,174 @@ function showEditForm(menu, category) {
 
     editForm.style.display = "block";
     editForm.scrollIntoView({ behavior: "smooth" });
+}
+
+// 장바구니에 메뉴 추가
+function addToCart(menuId) {
+    const menu = findMenuById(menuId);
+    if (!menu) return;
+
+    const existingItem = cart.find((item) => item.id === menuId);
+    if (existingItem) {
+        existingItem.quantity++;
+    } else {
+        cart.push({
+            id: menu.id,
+            name: menu.name,
+            price: menu.price,
+            quantity: 1,
+        });
+    }
+
+    updateCart();
+}
+
+// 장바구니에서 메뉴 제거
+function removeFromCart(menuId) {
+    cart = cart.filter((item) => item.id !== menuId);
+    updateCart();
+}
+
+// 장바구니 수량 업데이트
+function updateQuantity(menuId, change) {
+    const item = cart.find((item) => item.id === menuId);
+    if (!item) return;
+
+    item.quantity += change;
+    if (item.quantity <= 0) {
+        removeFromCart(menuId);
+    } else {
+        updateCart();
+    }
+}
+
+// 장바구니 UI 업데이트
+function updateCart() {
+    const cartItems = document.getElementById("cartItems");
+    const totalAmount = document.getElementById("totalAmount");
+    const checkoutBtn = document.getElementById("checkoutBtn");
+
+    cartItems.innerHTML = "";
+    let total = 0;
+
+    cart.forEach((item) => {
+        const itemTotal = item.price * item.quantity;
+        total += itemTotal;
+
+        const cartItem = document.createElement("div");
+        cartItem.className = "cart-item";
+        cartItem.innerHTML = `
+            <div class="cart-item-info">
+                <div>${item.name}</div>
+                <div>${item.price.toLocaleString()}원</div>
+            </div>
+            <div class="cart-item-quantity">
+                <button class="quantity-btn" onclick="updateQuantity(${
+                    item.id
+                }, -1)">-</button>
+                <span>${item.quantity}</span>
+                <button class="quantity-btn" onclick="updateQuantity(${
+                    item.id
+                }, 1)">+</button>
+            </div>
+        `;
+        cartItems.appendChild(cartItem);
+    });
+
+    totalAmount.textContent = `${total.toLocaleString()}원`;
+    checkoutBtn.disabled = cart.length === 0;
+}
+
+// 주문서 생성 및 다운로드
+async function generateReceipt() {
+    const receipt = document.createElement("div");
+    receipt.className = "receipt";
+    receipt.style.position = "absolute";
+    receipt.style.left = "-9999px";
+    document.body.appendChild(receipt);
+
+    receipt.innerHTML = `
+        <div class="receipt-header">
+            <h2>주문서</h2>
+            <p>${new Date().toLocaleString()}</p>
+        </div>
+        <div class="receipt-items">
+            ${cart
+                .map(
+                    (item) => `
+                <div class="receipt-item">
+                    <span>${item.name} x ${item.quantity}</span>
+                    <span>${(
+                        item.price * item.quantity
+                    ).toLocaleString()}원</span>
+                </div>
+            `
+                )
+                .join("")}
+        </div>
+        <div class="receipt-total">
+            <span>총 금액</span>
+            <span>${cart
+                .reduce((total, item) => total + item.price * item.quantity, 0)
+                .toLocaleString()}원</span>
+        </div>
+        <div class="receipt-footer">
+            <p>감사합니다. 또 방문해 주세요!</p>
+        </div>
+    `;
+
+    try {
+        const canvas = await html2canvas(receipt, {
+            scale: 2,
+            useCORS: true,
+            logging: true,
+            allowTaint: true,
+        });
+        const link = document.createElement("a");
+        link.download = `주문서_${new Date().toISOString().slice(0, 10)}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    } catch (error) {
+        console.error("Error generating receipt:", error);
+        alert("주문서 생성 중 오류가 발생했습니다.");
+    } finally {
+        document.body.removeChild(receipt);
+    }
+}
+
+// 결제 버튼 이벤트 리스너
+document.getElementById("checkoutBtn").addEventListener("click", async () => {
+    if (cart.length > 0) {
+        try {
+            await generateReceipt();
+            cart = [];
+            updateCart();
+            alert("결제가 완료되었습니다. 주문서가 다운로드됩니다.");
+        } catch (error) {
+            console.error("Error during checkout:", error);
+            alert("결제 처리 중 오류가 발생했습니다.");
+        }
+    }
+});
+
+// 메뉴 아이템에 장바구니 추가 버튼 이벤트 리스너 추가
+function addMenuEventListeners() {
+    document.querySelectorAll(".menu-item").forEach((item) => {
+        const addToCartBtn = item.querySelector(".add-to-cart");
+        if (addToCartBtn) {
+            addToCartBtn.addEventListener("click", () => {
+                const menuId = parseInt(item.dataset.id);
+                addToCart(menuId);
+            });
+        }
+    });
+}
+
+// 메뉴 ID로 메뉴 찾기
+function findMenuById(menuId) {
+    for (const items of Object.values(menuData)) {
+        const menu = items.find((item) => item.id === menuId);
+        if (menu) return menu;
+    }
+    return null;
 }

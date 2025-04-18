@@ -4,7 +4,7 @@
             "id": 1,
             "name": "아메리카노",
             "price": "3500",
-            "image": "07596cee-2d79-4d21-8aee-92a0b00a0821.jpg"
+            "image": "a7623f48-a364-40f9-9136-c102b9963b14.jpg"
         },
         {
             "id": 2,
@@ -15,5 +15,6 @@
     ],
     "non-coffee": [],
     "signature": [],
+    "dessert": [],
     "tea": []
 }

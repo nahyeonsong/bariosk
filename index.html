@@ -3,13 +3,31 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>메뉴 관리 시스템</title>
+        <title>Bariosk</title>
         <link rel="stylesheet" href="styles.css" />
+        <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     </head>
     <body>
         <header>
-            <h1>메뉴 관리 시스템</h1>
-            <button id="adminToggle" class="admin-toggle">관리자 모드</button>
+            <div class="header-content">
+                <h1>Bariosk</h1>
+                <div class="header-right">
+                    <div class="cart-section">
+                        <h2>장바구니</h2>
+                        <div id="cartItems"></div>
+                        <div class="cart-total">
+                            <span>총 금액:</span>
+                            <span id="totalAmount">0원</span>
+                        </div>
+                        <button id="checkoutBtn" class="checkout-btn" disabled>
+                            결제하기
+                        </button>
+                    </div>
+                    <button id="adminToggle" class="admin-toggle-btn">
+                        관리자 모드
+                    </button>
+                </div>
+            </div>
         </header>
 
         <main>
@@ -26,75 +44,122 @@
                     <h2>음료</h2>
                     <div class="menu-grid"></div>
                 </div>
+                <div class="menu-section" id="menuSection">
+                    <div class="menu-grid">
+                        <!-- 메뉴 아이템들이 여기에 동적으로 추가됩니다 -->
+                    </div>
+                </div>
             </div>
 
             <div id="adminPanel" class="admin-panel" style="display: none">
-                <h2>메뉴 관리</h2>
-                <form id="addMenuForm">
-                    <div class="form-group">
-                        <label for="category">카테고리</label>
-                        <select id="category" name="category" required>
-                            <option value="main">메인 메뉴</option>
-                            <option value="side">사이드 메뉴</option>
-                            <option value="drink">음료</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="name">메뉴 이름</label>
-                        <input type="text" id="name" name="name" required />
-                    </div>
-                    <div class="form-group">
-                        <label for="price">가격</label>
-                        <input type="number" id="price" name="price" required />
-                    </div>
-                    <div class="form-group">
-                        <label for="image">이미지</label>
-                        <input
-                            type="file"
-                            id="image"
-                            name="image"
-                            accept="image/*"
-                            required
-                        />
-                    </div>
-                    <button type="submit">메뉴 추가</button>
-                </form>
+                <div class="admin-tabs">
+                    <button class="tab-btn active" data-tab="menu">
+                        메뉴 관리
+                    </button>
+                    <button class="tab-btn" data-tab="category">
+                        카테고리 관리
+                    </button>
+                </div>
 
-                <form id="editMenuForm" style="display: none">
-                    <input type="hidden" name="menuId" id="editMenuId" />
-                    <div class="form-group">
-                        <label for="editCategory">카테고리</label>
-                        <select id="editCategory" name="category" required>
-                            <option value="main">메인 메뉴</option>
-                            <option value="side">사이드 메뉴</option>
-                            <option value="drink">음료</option>
-                        </select>
+                <div id="menuTab" class="tab-content active">
+                    <h2>메뉴 관리</h2>
+                    <form id="addMenuForm">
+                        <div class="form-group">
+                            <label for="category">카테고리</label>
+                            <select id="category" name="category" required>
+                                <!-- 카테고리 옵션들은 동적으로 생성될 것입니다 -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="name">메뉴 이름</label>
+                            <input type="text" id="name" name="name" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="price">가격</label>
+                            <input
+                                type="number"
+                                id="price"
+                                name="price"
+                                required
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="image">이미지</label>
+                            <input
+                                type="file"
+                                id="image"
+                                name="image"
+                                accept="image/*"
+                                required
+                            />
+                        </div>
+                        <button type="submit">메뉴 추가</button>
+                    </form>
+
+                    <form id="editMenuForm" style="display: none">
+                        <input type="hidden" name="menuId" id="editMenuId" />
+                        <div class="form-group">
+                            <label for="editCategory">카테고리</label>
+                            <select id="editCategory" name="category" required>
+                                <!-- 카테고리 옵션들은 동적으로 생성될 것입니다 -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editName">메뉴 이름</label>
+                            <input
+                                type="text"
+                                id="editName"
+                                name="name"
+                                required
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="editPrice">가격</label>
+                            <input
+                                type="number"
+                                id="editPrice"
+                                name="price"
+                                required
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="editImage">이미지</label>
+                            <input
+                                type="file"
+                                id="editImage"
+                                name="image"
+                                accept="image/*"
+                            />
+                        </div>
+                        <button type="submit">메뉴 수정</button>
+                        <button type="button" id="cancelEdit">취소</button>
+                    </form>
+                </div>
+
+                <div id="categoryTab" class="tab-content">
+                    <h2>카테고리 관리</h2>
+                    <form id="addCategoryForm">
+                        <div class="form-group">
+                            <label for="newCategoryName"
+                                >새 카테고리 이름</label
+                            >
+                            <input
+                                type="text"
+                                id="newCategoryName"
+                                name="name"
+                                required
+                            />
+                        </div>
+                        <button type="submit">카테고리 추가</button>
+                    </form>
+
+                    <div class="category-list">
+                        <h3>현재 카테고리</h3>
+                        <ul id="categoryList">
+                            <!-- 카테고리 목록은 동적으로 생성될 것입니다 -->
+                        </ul>
                     </div>
-                    <div class="form-group">
-                        <label for="editName">메뉴 이름</label>
-                        <input type="text" id="editName" name="name" required />
-                    </div>
-                    <div class="form-group">
-                        <label for="editPrice">가격</label>
-                        <input
-                            type="number"
-                            id="editPrice"
-                            name="price"
-                            required
-                        />
-                    </div>
-                    <div class="form-group">
-                        <label for="editImage">이미지</label>
-                        <input
-                            type="file"
-                            id="editImage"
-                            name="image"
-                            accept="image/*"
-                        />
-                    </div>
-                    <button type="submit">메뉴 수정</button>
-                    <button type="button" id="cancelEdit">취소</button>
-                </form>
+                </div>
             </div>
         </main>
 
