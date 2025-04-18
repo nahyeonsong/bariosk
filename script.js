@@ -1,6 +1,9 @@
 // API 기본 URL 설정
 const API_BASE_URL = "http://localhost:5000";
 
+// 전역 변수
+let isAdminMode = false;
+
 // DOM이 로드되면 실행
 document.addEventListener("DOMContentLoaded", () => {
     const adminToggle = document.getElementById("adminToggle");
@@ -32,11 +35,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 관리자 패널 토글
     adminToggle.addEventListener("click", () => {
-        console.log("관리자 모드 버튼 클릭됨");
-        const currentDisplay = adminPanel.style.display;
-        console.log("현재 display 값:", currentDisplay);
-        adminPanel.style.display = currentDisplay === "none" ? "block" : "none";
-        console.log("변경된 display 값:", adminPanel.style.display);
+        isAdminMode = !isAdminMode;
+        adminPanel.style.display = isAdminMode ? "block" : "none";
+        adminToggle.textContent = isAdminMode ? "일반 모드" : "관리자 모드";
+
+        // 메뉴 수정 버튼 표시/숨김
+        const editButtons = document.querySelectorAll(".edit-menu-btn");
+        editButtons.forEach((button) => {
+            button.style.display = isAdminMode ? "block" : "none";
+        });
     });
 
     // 메뉴 데이터 로드
@@ -230,25 +237,69 @@ function renderCategoryList(categories) {
 
             const saveButton = document.createElement("button");
             saveButton.textContent = "저장";
+            saveButton.className = "save-category";
+
+            const cancelButton = document.createElement("button");
+            cancelButton.textContent = "취소";
+            cancelButton.className = "cancel-edit";
+
+            const buttonContainer = document.createElement("div");
+            buttonContainer.className = "edit-buttons";
+            buttonContainer.appendChild(saveButton);
+            buttonContainer.appendChild(cancelButton);
+
+            // 원래 버튼들을 숨기고 입력 필드와 새 버튼들을 표시
+            const actionsDiv = li.querySelector(".category-actions");
+            actionsDiv.style.display = "none";
+            nameSpan.replaceWith(input);
+            li.appendChild(buttonContainer);
+
+            // 저장 버튼 클릭 이벤트
             saveButton.addEventListener("click", async () => {
+                const newName = input.value.trim();
+                if (!newName) {
+                    alert("카테고리 이름을 입력해주세요.");
+                    return;
+                }
+
                 try {
                     const response = await fetch(
-                        `${API_BASE_URL}/api/categories/${category}`,
+                        `${API_BASE_URL}/api/categories/${encodeURIComponent(
+                            category
+                        )}`,
                         {
                             method: "PUT",
                             headers: {
                                 "Content-Type": "application/json",
                             },
-                            body: JSON.stringify({ name: input.value }),
+                            body: JSON.stringify({ name: newName }),
                         }
                     );
 
+                    const data = await response.json();
+
                     if (!response.ok) {
-                        throw new Error("카테고리 수정 실패");
+                        throw new Error(data.error || "카테고리 수정 실패");
                     }
 
-                    loadCategories();
-                    loadMenuData();
+                    // 서버 응답 메시지에 따라 다른 동작 수행
+                    if (data.message === "이미 존재하는 카테고리 이름입니다") {
+                        alert("이미 존재하는 카테고리 이름입니다.");
+                        input.replaceWith(nameSpan);
+                        buttonContainer.remove();
+                        actionsDiv.style.display = "flex";
+                    } else if (
+                        data.message === "카테고리 이름이 변경되지 않았습니다"
+                    ) {
+                        alert("카테고리 이름이 변경되지 않았습니다.");
+                        input.replaceWith(nameSpan);
+                        buttonContainer.remove();
+                        actionsDiv.style.display = "flex";
+                    } else {
+                        loadCategories();
+                        loadMenuData();
+                        alert("카테고리가 수정되었습니다.");
+                    }
                 } catch (error) {
                     console.error("Error:", error);
                     alert(
@@ -257,8 +308,12 @@ function renderCategoryList(categories) {
                 }
             });
 
-            nameSpan.replaceWith(input);
-            e.target.replaceWith(saveButton);
+            // 취소 버튼 클릭 이벤트
+            cancelButton.addEventListener("click", () => {
+                input.replaceWith(nameSpan);
+                buttonContainer.remove();
+                actionsDiv.style.display = "flex";
+            });
         });
     });
 
@@ -270,7 +325,9 @@ function renderCategoryList(categories) {
             if (confirm(`정말로 "${category}" 카테고리를 삭제하시겠습니까?`)) {
                 try {
                     const response = await fetch(
-                        `${API_BASE_URL}/api/categories/${category}`,
+                        `${API_BASE_URL}/api/categories/${encodeURIComponent(
+                            category
+                        )}`,
                         {
                             method: "DELETE",
                         }
@@ -327,6 +384,7 @@ function renderMenu(menuData) {
     for (const [category, items] of Object.entries(menuData)) {
         const menuSection = document.createElement("div");
         menuSection.className = "menu-section";
+        menuSection.id = category;
 
         const sectionTitle = document.createElement("h2");
         sectionTitle.textContent = category;
@@ -338,6 +396,8 @@ function renderMenu(menuData) {
         items.forEach((item) => {
             const menuItem = document.createElement("div");
             menuItem.className = "menu-item";
+            menuItem.dataset.id = item.id;
+            menuItem.dataset.category = category;
 
             const img = document.createElement("img");
             img.src = `/static/images/${item.image}`;
@@ -352,8 +412,17 @@ function renderMenu(menuData) {
             const price = document.createElement("p");
             price.textContent = `${item.price.toLocaleString()}원`;
 
+            const editButton = document.createElement("button");
+            editButton.className = "edit-menu-btn";
+            editButton.textContent = "수정";
+            editButton.style.display = isAdminMode ? "block" : "none";
+            editButton.addEventListener("click", () => {
+                showEditForm(item, category);
+            });
+
             itemInfo.appendChild(name);
             itemInfo.appendChild(price);
+            itemInfo.appendChild(editButton);
 
             menuItem.appendChild(img);
             menuItem.appendChild(itemInfo);
@@ -363,4 +432,23 @@ function renderMenu(menuData) {
         menuSection.appendChild(menuGrid);
         menuContainer.appendChild(menuSection);
     }
+}
+
+// 수정 폼 표시
+function showEditForm(menu, category) {
+    const editForm = document.getElementById("editMenuForm");
+    const editMenuId = document.getElementById("editMenuId");
+    const editCategory = document.getElementById("editCategory");
+    const editName = document.getElementById("editName");
+    const editPrice = document.getElementById("editPrice");
+    const editImage = document.getElementById("editImage");
+
+    editMenuId.value = menu.id;
+    editCategory.value = category;
+    editName.value = menu.name;
+    editPrice.value = menu.price;
+    editImage.value = ""; // 이미지 입력 필드 초기화
+
+    editForm.style.display = "block";
+    editForm.scrollIntoView({ behavior: "smooth" });
 }
