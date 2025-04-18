@@ -374,6 +374,11 @@ async function loadMenuData() {
 // 메뉴 표시 업데이트
 function updateMenuDisplay() {
     const menuContainer = document.getElementById("menuContainer");
+    if (!menuContainer) {
+        console.error("menuContainer element not found");
+        return;
+    }
+
     menuContainer.innerHTML = "";
 
     for (const category in menuData) {
