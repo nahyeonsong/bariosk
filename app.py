@@ -6,8 +6,7 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 import io
 import uuid
-import base64
-import pillow_avif  # AVIF 지원을 위한 플러그인
+import base64 
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
