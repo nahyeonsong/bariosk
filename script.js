@@ -1,5 +1,8 @@
 // API 기본 URL 설정
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL =
+    window.location.hostname === "nahyeonsong.github.io"
+        ? "https://bariosk-backend.herokuapp.com"
+        : "http://localhost:5000";
 
 // 전역 변수
 let isAdminMode = false;

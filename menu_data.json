@@ -13,8 +13,22 @@
             "image": "15185792-5ecb-435d-90db-dbd67b630206.jpg"
         }
     ],
-    "non-coffee": [],
+    "non-coffee": [
+        {
+            "id": 1,
+            "name": "딸기라떼",
+            "price": "6500",
+            "image": "88a32db8-87de-4199-81be-c876bea16a85.jpg"
+        }
+    ],
     "signature": [],
-    "dessert": [],
+    "dessert": [
+        {
+            "id": 1,
+            "name": "휘낭시에",
+            "price": "2000",
+            "image": "181f048f-a48b-4e4d-a25f-9c9e80289eed.jpg"
+        }
+    ],
     "tea": []
 }
