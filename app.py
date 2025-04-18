@@ -157,7 +157,7 @@ def add_menu_item():
                 'id': new_id,
                 'name': name,
                 'price': price,
-                'image': filename
+                'image': f'/static/images/{filename}'  # 이미지 경로 수정
             }
             
             print(f"추가할 메뉴: {new_menu}")
@@ -232,7 +232,7 @@ def update_menu(category, menu_id):
         print(f"메뉴 수정 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('static/images/<filename>')
+@app.route('/static/images/<filename>')
 def serve_image(filename):
     try:
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)

@@ -373,38 +373,35 @@ async function loadMenuData() {
 
 // 메뉴 표시 업데이트
 function updateMenuDisplay() {
-    console.log("Updating menu display with:", menuData); // 디버깅용
+    const menuContainer = document.getElementById("menuContainer");
+    menuContainer.innerHTML = "";
 
-    // 모든 메뉴 섹션 숨기기
-    document.querySelectorAll(".menu-section").forEach((section) => {
-        section.style.display = "none";
-    });
+    for (const category in menuData) {
+        const categorySection = document.createElement("div");
+        categorySection.className = "menu-section";
+        categorySection.id = `category-${category}`;
 
-    // 각 카테고리별로 메뉴 표시
-    for (const [category, items] of Object.entries(menuData)) {
-        const sectionId = `${category}-menu`;
-        let section = document.getElementById(sectionId);
+        const categoryTitle = document.createElement("h2");
+        categoryTitle.textContent = category;
+        categorySection.appendChild(categoryTitle);
 
-        if (!section) {
-            // 섹션이 없으면 생성
-            section = document.createElement("div");
-            section.id = sectionId;
-            section.className = "menu-section";
-            section.innerHTML = `
-                <h2>${category}</h2>
-                <div class="menu-grid"></div>
+        const menuGrid = document.createElement("div");
+        menuGrid.className = "menu-grid";
+
+        menuData[category].forEach((menu) => {
+            const menuItem = document.createElement("div");
+            menuItem.className = "menu-item";
+            menuItem.innerHTML = `
+                <img src="${menu.image}" alt="${menu.name}">
+                <h3>${menu.name}</h3>
+                <p>${menu.price}원</p>
+                <button onclick="addToCart(${menu.id}, '${category}', '${menu.name}', ${menu.price})">장바구니에 추가</button>
             `;
-            document.querySelector(".menu-container").appendChild(section);
-        }
-
-        section.style.display = "block";
-        const menuGrid = section.querySelector(".menu-grid");
-        menuGrid.innerHTML = "";
-
-        items.forEach((item) => {
-            const menuItem = createMenuItem(item);
             menuGrid.appendChild(menuItem);
         });
+
+        categorySection.appendChild(menuGrid);
+        menuContainer.appendChild(categorySection);
     }
 }
 
