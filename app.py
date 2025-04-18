@@ -107,20 +107,26 @@ def get_menu():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/menu', methods=['POST'])
-def add_menu():
+def add_menu_item():
     try:
-        print("요청 데이터:", request.form)
-        print("파일 데이터:", request.files)
-        
+        # 이미지 파일 처리
         if 'image' not in request.files:
-            return jsonify({'error': '이미지 파일이 없습니다.'}), 400
+            return jsonify({'error': '이미지 파일이 필요합니다'}), 400
+            
+        image_file = request.files['image']
+        if image_file.filename == '':
+            return jsonify({'error': '선택된 파일이 없습니다'}), 400
+            
+        # 이미지 형식 확인
+        image = Image.open(image_file)
+        image_format = image.format
+        print(f"이미지 형식: {image_format}")
         
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': '선택된 파일이 없습니다.'}), 400
-        
-        if not allowed_file(file.filename):
-            return jsonify({'error': '허용되지 않는 파일 형식입니다.'}), 400
+        # 이미지 저장
+        filename = str(uuid.uuid4()) + '.jpg'
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        image.convert('RGB').save(image_path, 'JPEG', quality=85)
+        print(f"이미지 저장됨: {image_path}")
         
         # 메뉴 데이터 로드
         menu_data = load_menu_data()
@@ -142,10 +148,6 @@ def add_menu():
             print(f"새 카테고리 생성: {category}")
         
         try:
-            # 이미지 저장
-            image_path = save_image(file)
-            print(f"이미지 저장 성공: {image_path}")
-            
             # 새 메뉴 ID 생성
             new_id = 1
             if menu_data[category]:
@@ -156,7 +158,7 @@ def add_menu():
                 'id': new_id,
                 'name': name,
                 'price': price,
-                'image': image_path
+                'image': filename
             }
             
             print(f"추가할 메뉴: {new_menu}")
