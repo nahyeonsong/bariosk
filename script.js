@@ -418,7 +418,7 @@ function createMenuItem(item) {
     const buttonClass = isAdminMode ? "edit-menu-btn" : "add-to-cart";
 
     menuItem.innerHTML = `
-        <img src="/static/images/${item.image}" alt="${item.name}">
+        <img src="static/images/${item.image}" alt="${item.name}">
         <div class="menu-item-info">
             <h3>${item.name}</h3>
             <p>${item.price.toLocaleString()}원</p>
