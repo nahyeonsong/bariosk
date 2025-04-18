@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>메뉴 관리 시스템</title>
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <header>
+            <h1>메뉴 관리 시스템</h1>
+            <button id="adminToggle" class="admin-toggle">관리자 모드</button>
+        </header>
+
+        <main>
+            <div class="menu-container">
+                <div class="menu-section active" id="main-menu">
+                    <h2>메인 메뉴</h2>
+                    <div class="menu-grid"></div>
+                </div>
+                <div class="menu-section" id="side-menu">
+                    <h2>사이드 메뉴</h2>
+                    <div class="menu-grid"></div>
+                </div>
+                <div class="menu-section" id="drink-menu">
+                    <h2>음료</h2>
+                    <div class="menu-grid"></div>
+                </div>
+            </div>
+
+            <div id="adminPanel" class="admin-panel" style="display: none">
+                <h2>메뉴 관리</h2>
+                <form id="addMenuForm">
+                    <div class="form-group">
+                        <label for="category">카테고리</label>
+                        <select id="category" name="category" required>
+                            <option value="main">메인 메뉴</option>
+                            <option value="side">사이드 메뉴</option>
+                            <option value="drink">음료</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="name">메뉴 이름</label>
+                        <input type="text" id="name" name="name" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="price">가격</label>
+                        <input type="number" id="price" name="price" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="image">이미지</label>
+                        <input
+                            type="file"
+                            id="image"
+                            name="image"
+                            accept="image/*"
+                            required
+                        />
+                    </div>
+                    <button type="submit">메뉴 추가</button>
+                </form>
+
+                <form id="editMenuForm" style="display: none">
+                    <input type="hidden" name="menuId" id="editMenuId" />
+                    <div class="form-group">
+                        <label for="editCategory">카테고리</label>
+                        <select id="editCategory" name="category" required>
+                            <option value="main">메인 메뉴</option>
+                            <option value="side">사이드 메뉴</option>
+                            <option value="drink">음료</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editName">메뉴 이름</label>
+                        <input type="text" id="editName" name="name" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="editPrice">가격</label>
+                        <input
+                            type="number"
+                            id="editPrice"
+                            name="price"
+                            required
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="editImage">이미지</label>
+                        <input
+                            type="file"
+                            id="editImage"
+                            name="image"
+                            accept="image/*"
+                        />
+                    </div>
+                    <button type="submit">메뉴 수정</button>
+                    <button type="button" id="cancelEdit">취소</button>
+                </form>
+            </div>
+        </main>
+
+        <script src="script.js"></script>
+    </body>
+</html>

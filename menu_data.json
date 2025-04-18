@@ -1,0 +1,19 @@
+{
+    "coffee": [
+        {
+            "id": 1,
+            "name": "아메리카노",
+            "price": "3500",
+            "image": "07596cee-2d79-4d21-8aee-92a0b00a0821.jpg"
+        },
+        {
+            "id": 2,
+            "name": "카페라뗴",
+            "price": "4000",
+            "image": "15185792-5ecb-435d-90db-dbd67b630206.jpg"
+        }
+    ],
+    "non-coffee": [],
+    "signature": [],
+    "tea": []
+}
