@@ -441,11 +441,17 @@ function updateMenuDisplay() {
                 menuItem.addEventListener("dragend", handleDragEnd);
             }
 
+            // 온도 표시 텍스트 설정
+            let temperatureText = "";
+            if (menu.temperature === "H") temperatureText = "(H)";
+            else if (menu.temperature === "I") temperatureText = "(I)";
+            else if (menu.temperature === "B") temperatureText = "(H/I)";
+
             menuItem.innerHTML = `
                 ${isAdminMode ? '<div class="drag-handle"></div>' : ""}
                 <img src="static/images/${menu.image}" alt="${menu.name}">
                 <div class="menu-item-info">
-                    <h3>${menu.name}</h3>
+                    <h3>${temperatureText} ${menu.name}</h3>
                     <p>${menu.price}원</p>
                     ${
                         isAdminMode
@@ -541,6 +547,7 @@ function showEditForm(menu, category) {
     const editMenuId = document.getElementById("editMenuId");
     const editCategory = document.getElementById("editCategory");
     const editName = document.getElementById("editName");
+    const editTemperature = document.getElementById("editTemperature");
     const editPrice = document.getElementById("editPrice");
     const editImage = document.getElementById("editImage");
     const deleteMenuBtn = document.getElementById("deleteMenu");
@@ -548,6 +555,7 @@ function showEditForm(menu, category) {
     editMenuId.value = menu.id;
     editCategory.value = category;
     editName.value = menu.name;
+    editTemperature.value = menu.temperature || "B";
     editPrice.value = menu.price;
     editImage.value = ""; // 이미지 입력 필드 초기화
 
