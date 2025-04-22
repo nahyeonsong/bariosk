@@ -765,25 +765,24 @@ function handleDragLeave() {
     this.classList.remove("drag-over");
 }
 
-function handleDrop() {
+async function handleDrop() {
     this.classList.remove("drag-over");
     const dragEndIndex = parseInt(this.dataset.index);
 
     if (dragStartIndex !== dragEndIndex) {
         // 메뉴 데이터 업데이트
         const category = this.dataset.category;
-        const menuData = loadMenuData();
-        const items = menuData[category];
 
         // 항목 순서 변경
+        const items = menuData[category];
         const [movedItem] = items.splice(dragStartIndex, 1);
         items.splice(dragEndIndex, 0, movedItem);
 
         // 변경된 데이터 저장
-        saveMenuData(menuData);
+        await saveMenuData(menuData);
 
         // UI 업데이트
-        renderMenuItems(category, items);
+        updateMenuDisplay();
     }
 }
 
@@ -795,19 +794,24 @@ function handleDragEnd() {
 }
 
 // 메뉴 데이터 저장 함수
-function saveMenuData(menuData) {
-    fetch("/api/menu", {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(menuData),
-    })
-        .then((response) => response.json())
-        .then((data) => {
-            console.log("메뉴 순서가 저장되었습니다:", data);
-        })
-        .catch((error) => {
-            console.error("메뉴 순서 저장 중 오류 발생:", error);
+async function saveMenuData(menuData) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/menu`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(menuData),
         });
+
+        if (!response.ok) {
+            throw new Error("메뉴 순서 저장 실패");
+        }
+
+        const data = await response.json();
+        console.log("메뉴 순서가 저장되었습니다:", data);
+    } catch (error) {
+        console.error("메뉴 순서 저장 중 오류 발생:", error);
+        alert("메뉴 순서 저장 중 오류가 발생했습니다.");
+    }
 }
