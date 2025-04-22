@@ -445,7 +445,6 @@ function updateMenuDisplay() {
             let temperatureText = "";
             if (menu.temperature === "H") temperatureText = "(H)";
             else if (menu.temperature === "I") temperatureText = "(I)";
-            else if (menu.temperature === "B") temperatureText = "(H/I)";
 
             menuItem.innerHTML = `
                 ${isAdminMode ? '<div class="drag-handle"></div>' : ""}
@@ -555,7 +554,7 @@ function showEditForm(menu, category) {
     editMenuId.value = menu.id;
     editCategory.value = category;
     editName.value = menu.name;
-    editTemperature.value = menu.temperature || "B";
+    editTemperature.value = menu.temperature || "H";
     editPrice.value = menu.price;
     editImage.value = ""; // 이미지 입력 필드 초기화
 
