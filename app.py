@@ -104,8 +104,9 @@ def add_menu():
         name = request.form.get('name')
         price = int(request.form.get('price'))
         image_file = request.files.get('image')
+        temperature = request.form.get('temperature')
         
-        if not all([category, name, price, image_file]):
+        if not all([category, name, price, image_file, temperature]):
             return jsonify({'error': '모든 필드를 입력해주세요'}), 400
         
         # 이미지 저장
@@ -115,11 +116,12 @@ def add_menu():
         new_id = generate_new_menu_id(menu_data)
         
         # 새 메뉴 항목 생성
-        new_item = {
-            'id': new_id,
-            'name': name,
-            'price': price,
-            'image': image_filename
+        menu = {
+            "id": new_id,
+            "name": name,
+            "price": price,
+            "image": image_filename,
+            "temperature": temperature
         }
         
         # 카테고리가 없으면 새로 생성
@@ -127,7 +129,7 @@ def add_menu():
             menu_data[category] = []
         
         # 메뉴 추가
-        menu_data[category].append(new_item)
+        menu_data[category].append(menu)
         
         # 데이터 저장
         save_menu_data(menu_data)
@@ -156,6 +158,7 @@ def update_menu(category, menu_id):
         name = request.form.get('name', menu['name'])
         price = request.form.get('price', menu['price'])
         new_category = request.form.get('category', category)
+        temperature = request.form.get('temperature', menu['temperature'])
         
         # 이미지 업데이트
         if 'image' in request.files:
@@ -173,6 +176,7 @@ def update_menu(category, menu_id):
         # 메뉴 정보 업데이트
         menu['name'] = name
         menu['price'] = price
+        menu['temperature'] = temperature
         
         # 카테고리가 변경된 경우
         if new_category != category:
