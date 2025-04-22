@@ -425,11 +425,24 @@ function updateMenuDisplay() {
         menuData[category].forEach((menu) => {
             const menuItem = document.createElement("div");
             menuItem.className = "menu-item";
-            menuItem.draggable = true;
-            menuItem.dataset.index = menuData[category].indexOf(menu);
-            menuItem.dataset.category = category;
+
+            // 관리자 모드에서만 드래그 가능하도록 설정
+            if (isAdminMode) {
+                menuItem.draggable = true;
+                menuItem.dataset.index = menuData[category].indexOf(menu);
+                menuItem.dataset.category = category;
+
+                // 드래그 이벤트 리스너 추가
+                menuItem.addEventListener("dragstart", handleDragStart);
+                menuItem.addEventListener("dragover", handleDragOver);
+                menuItem.addEventListener("dragenter", handleDragEnter);
+                menuItem.addEventListener("dragleave", handleDragLeave);
+                menuItem.addEventListener("drop", handleDrop);
+                menuItem.addEventListener("dragend", handleDragEnd);
+            }
+
             menuItem.innerHTML = `
-                <div class="drag-handle"></div>
+                ${isAdminMode ? '<div class="drag-handle"></div>' : ""}
                 <img src="static/images/${menu.image}" alt="${menu.name}">
                 <div class="menu-item-info">
                     <h3>${menu.name}</h3>
@@ -441,14 +454,6 @@ function updateMenuDisplay() {
                     }
                 </div>
             `;
-
-            // 드래그 이벤트 리스너 추가
-            menuItem.addEventListener("dragstart", handleDragStart);
-            menuItem.addEventListener("dragover", handleDragOver);
-            menuItem.addEventListener("dragenter", handleDragEnter);
-            menuItem.addEventListener("dragleave", handleDragLeave);
-            menuItem.addEventListener("drop", handleDrop);
-            menuItem.addEventListener("dragend", handleDragEnd);
 
             menuGrid.appendChild(menuItem);
         });
