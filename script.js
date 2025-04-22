@@ -450,7 +450,9 @@ function updateMenuDisplay() {
                 ${isAdminMode ? '<div class="drag-handle"></div>' : ""}
                 <img src="static/images/${menu.image}" alt="${menu.name}">
                 <div class="menu-item-info">
-                    <h3>${temperatureText} ${menu.name}</h3>
+                    <h3>${temperatureText}${temperatureText ? " " : ""}${
+                menu.name
+            }</h3>
                     <p>${menu.price}원</p>
                     ${
                         isAdminMode
