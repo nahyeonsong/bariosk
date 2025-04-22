@@ -215,13 +215,18 @@ def delete_menu(category, menu_id):
 @app.route('/static/images/<filename>')
 def serve_image(filename):
     try:
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not os.path.exists(image_path):
+            print(f"이미지 파일을 찾을 수 없음: {filename}")
+            # 기본 이미지 경로
+            default_image = os.path.join(app.config['UPLOAD_FOLDER'], 'logo.png')
+            if os.path.exists(default_image):
+                print(f"기본 이미지 사용: logo.png")
+                return send_from_directory(app.config['UPLOAD_FOLDER'], 'logo.png')
+            return jsonify({'error': '이미지를 찾을 수 없습니다.'}), 404
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
     except Exception as e:
         print(f"이미지 서빙 중 오류 발생: {str(e)}")
-        # 기본 이미지 경로
-        default_image = os.path.join(app.config['UPLOAD_FOLDER'], 'logo.png')
-        if os.path.exists(default_image):
-            return send_from_directory(app.config['UPLOAD_FOLDER'], 'logo.png')
         return jsonify({'error': '이미지를 찾을 수 없습니다.'}), 404
 
 @app.route('/api/categories', methods=['GET'])
