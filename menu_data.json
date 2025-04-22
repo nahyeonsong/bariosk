@@ -2,15 +2,21 @@
     "coffee": [
         {
             "id": 1,
-            "name": "아메리카노",
-            "price": "3500",
-            "image": "a7623f48-a364-40f9-9136-c102b9963b14.jpg"
+            "name": "(I) 아메리카노",
+            "price": "2000",
+            "image": "e954dc77-2879-4e30-9685-4d8ae14a993d.jpg"
         },
         {
             "id": 2,
-            "name": "카페라떼",
-            "price": "4000",
+            "name": "(H) 카페라떼",
+            "price": "2500",
             "image": "15185792-5ecb-435d-90db-dbd67b630206.jpg"
+        },
+        {
+            "id": 5,
+            "name": "(H) 아메리카노",
+            "price": 2000,
+            "image": "5da2628c-ab53-4eab-80d6-ed0bd3ad2872.jpg"
         }
     ],
     "non-coffee": [

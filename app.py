@@ -80,6 +80,10 @@ def save_image(file):
         print(f"이미지 저장 실패: {str(e)}")
         raise
 
+@app.route('/')
+def index():
+    return send_from_directory('.', 'index.html')
+
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
     try:
@@ -323,6 +327,36 @@ def generate_new_menu_id(menu_data):
             if item['id'] > max_id:
                 max_id = item['id']
     return max_id + 1
+
+@app.route('/styles.css')
+def serve_css():
+    return send_from_directory('.', 'styles.css')
+
+@app.route('/script.js')
+def serve_js():
+    return send_from_directory('.', 'script.js')
+
+@app.route('/api/menu', methods=['PUT'])
+def update_menu_order():
+    try:
+        new_menu_data = request.get_json()
+        if not new_menu_data:
+            return jsonify({'error': '메뉴 데이터가 필요합니다.'}), 400
+        
+        # 기존 메뉴 데이터 로드
+        menu_data = load_menu_data()
+        
+        # 새로운 메뉴 데이터로 업데이트
+        menu_data.update(new_menu_data)
+        
+        # 변경사항 저장
+        save_menu_data(menu_data)
+        
+        return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'}), 200
+        
+    except Exception as e:
+        print(f"메뉴 순서 업데이트 중 오류 발생: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # 서버 시작 시 static/images 디렉토리 확인

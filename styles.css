@@ -110,6 +110,8 @@ main {
     overflow: hidden;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s ease;
+    cursor: move;
+    position: relative;
 }
 
 .menu-item:hover {
@@ -557,4 +559,36 @@ button[type="submit"]:hover {
 
 .form-actions .delete-btn:hover {
     background-color: #d32f2f;
+}
+
+.menu-item.dragging {
+    opacity: 0.5;
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.menu-item.drag-over {
+    border: 2px dashed #4caf50;
+}
+
+.menu-item .drag-handle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 24px;
+    height: 24px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: move;
+    z-index: 1;
+}
+
+.menu-item .drag-handle::before {
+    content: "⋮⋮";
+    color: #666;
+    font-size: 16px;
+    line-height: 1;
 }

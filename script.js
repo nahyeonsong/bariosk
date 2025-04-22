@@ -9,6 +9,10 @@ let isAdminMode = false;
 let cart = [];
 let menuData = {};
 
+// 드래그 앤 드롭 관련 변수
+let draggedItem = null;
+let dragStartIndex = null;
+
 // DOM이 로드되면 실행
 document.addEventListener("DOMContentLoaded", () => {
     const adminPanel = document.getElementById("adminPanel");
@@ -421,16 +425,31 @@ function updateMenuDisplay() {
         menuData[category].forEach((menu) => {
             const menuItem = document.createElement("div");
             menuItem.className = "menu-item";
+            menuItem.draggable = true;
+            menuItem.dataset.index = menuData[category].indexOf(menu);
+            menuItem.dataset.category = category;
             menuItem.innerHTML = `
+                <div class="drag-handle"></div>
                 <img src="static/images/${menu.image}" alt="${menu.name}">
-                <h3>${menu.name}</h3>
-                <p>${menu.price}원</p>
-                ${
-                    isAdminMode
-                        ? `<button class="edit-menu-btn" data-id="${menu.id}" data-category="${category}">수정</button>`
-                        : `<button class="add-to-cart-btn" data-id="${menu.id}">장바구니에 추가</button>`
-                }
+                <div class="menu-item-info">
+                    <h3>${menu.name}</h3>
+                    <p>${menu.price}원</p>
+                    ${
+                        isAdminMode
+                            ? `<button class="edit-menu-btn" data-id="${menu.id}" data-category="${category}">수정</button>`
+                            : `<button class="add-to-cart-btn" data-id="${menu.id}">장바구니에 추가</button>`
+                    }
+                </div>
             `;
+
+            // 드래그 이벤트 리스너 추가
+            menuItem.addEventListener("dragstart", handleDragStart);
+            menuItem.addEventListener("dragover", handleDragOver);
+            menuItem.addEventListener("dragenter", handleDragEnter);
+            menuItem.addEventListener("dragleave", handleDragLeave);
+            menuItem.addEventListener("drop", handleDrop);
+            menuItem.addEventListener("dragend", handleDragEnd);
+
             menuGrid.appendChild(menuItem);
         });
 
@@ -724,4 +743,71 @@ function findMenuById(menuId) {
         if (menu) return menu;
     }
     return null;
+}
+
+// 드래그 앤 드롭 이벤트 핸들러
+function handleDragStart(e) {
+    draggedItem = this;
+    dragStartIndex = parseInt(this.dataset.index);
+    this.classList.add("dragging");
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+}
+
+function handleDragEnter(e) {
+    e.preventDefault();
+    this.classList.add("drag-over");
+}
+
+function handleDragLeave() {
+    this.classList.remove("drag-over");
+}
+
+function handleDrop() {
+    this.classList.remove("drag-over");
+    const dragEndIndex = parseInt(this.dataset.index);
+
+    if (dragStartIndex !== dragEndIndex) {
+        // 메뉴 데이터 업데이트
+        const category = this.dataset.category;
+        const menuData = loadMenuData();
+        const items = menuData[category];
+
+        // 항목 순서 변경
+        const [movedItem] = items.splice(dragStartIndex, 1);
+        items.splice(dragEndIndex, 0, movedItem);
+
+        // 변경된 데이터 저장
+        saveMenuData(menuData);
+
+        // UI 업데이트
+        renderMenuItems(category, items);
+    }
+}
+
+function handleDragEnd() {
+    this.classList.remove("dragging");
+    document.querySelectorAll(".menu-item").forEach((item) => {
+        item.classList.remove("drag-over");
+    });
+}
+
+// 메뉴 데이터 저장 함수
+function saveMenuData(menuData) {
+    fetch("/api/menu", {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(menuData),
+    })
+        .then((response) => response.json())
+        .then((data) => {
+            console.log("메뉴 순서가 저장되었습니다:", data);
+        })
+        .catch((error) => {
+            console.error("메뉴 순서 저장 중 오류 발생:", error);
+        });
 }
