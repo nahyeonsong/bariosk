@@ -158,7 +158,7 @@ def update_menu(category, menu_id):
         name = request.form.get('name', menu['name'])
         price = request.form.get('price', menu['price'])
         new_category = request.form.get('category', category)
-        temperature = request.form.get('temperature', menu['temperature'])
+        temperature = request.form.get('temperature', menu.get('temperature', 'H'))  # 기본값 'H' 추가
         
         # 이미지 업데이트
         if 'image' in request.files:
@@ -361,6 +361,27 @@ def update_menu_order():
     except Exception as e:
         print(f"메뉴 순서 업데이트 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+def initialize_menu_data():
+    initial_data = {
+        "coffee": [
+            {
+                "id": 1,
+                "name": "아메리카노",
+                "price": 2000,
+                "image": "e954dc77-2879-4e30-9685-4d8ae14a993d.jpg",
+                "temperature": "H"
+            },
+            {
+                "id": 2,
+                "name": "카페라떼",
+                "price": 2500,
+                "image": "15185792-5ecb-435d-90db-dbd67b630206.jpg",
+                "temperature": "H"
+            }
+        ]
+    }
+    save_menu_data(initial_data)
 
 if __name__ == '__main__':
     # 서버 시작 시 static/images 디렉토리 확인
