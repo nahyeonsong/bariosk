@@ -3,8 +3,8 @@
         {
             "id": 5,
             "image": "5da2628c-ab53-4eab-80d6-ed0bd3ad2872.jpg",
-            "name": "(H) 아메리카노",
-            "price": 2000
+            "name": "아메리카노",
+            "price": "2000"
         },
         {
             "id": 1,
