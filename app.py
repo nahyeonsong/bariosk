@@ -38,15 +38,18 @@ def save_image(file):
     try:
         # 디렉토리가 없으면 생성
         if not os.path.exists(app.config['UPLOAD_FOLDER']):
-            os.makedirs(app.config['UPLOAD_FOLDER'])
+            print(f"이미지 디렉토리 생성: {app.config['UPLOAD_FOLDER']}")
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         
         # 파일 데이터를 메모리에 로드
         file_data = file.read()
+        if not file_data:
+            raise ValueError("파일 데이터가 비어있습니다.")
         
         # 이미지 데이터를 PIL Image로 변환
         try:
             img = Image.open(io.BytesIO(file_data))
-            print(f"이미지 포맷: {img.format}")  # 디버깅용 로그
+            print(f"이미지 포맷: {img.format}, 크기: {img.size}")
         except Exception as e:
             print(f"이미지 변환 실패: {str(e)}")
             raise ValueError("이미지 파일을 처리할 수 없습니다.")
@@ -66,6 +69,11 @@ def save_image(file):
         # 이미지 저장 (최적화 옵션 추가)
         img.save(filepath, 'JPEG', quality=85, optimize=True, progressive=True)
         print(f"이미지 저장 성공: {filepath}")
+        
+        # 저장된 파일이 실제로 존재하는지 확인
+        if not os.path.exists(filepath):
+            raise ValueError("이미지 파일이 저장되지 않았습니다.")
+            
         return unique_filename
         
     except Exception as e:
