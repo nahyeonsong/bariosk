@@ -592,7 +592,12 @@ function showEditForm(menu, category) {
 // 장바구니에 메뉴 추가
 function addToCart(menuId) {
     const menu = findMenuById(menuId);
-    if (!menu) return;
+    if (!menu) {
+        console.error("Menu not found:", menuId);
+        return;
+    }
+
+    console.log("Adding to cart:", menu); // 디버깅용
 
     const existingItem = cart.find((item) => item.id === menuId);
     if (existingItem) {
@@ -603,7 +608,7 @@ function addToCart(menuId) {
             name: menu.name,
             price: menu.price,
             quantity: 1,
-            temperature: menu.temperature,
+            temperature: menu.temperature || "",
         });
     }
 
@@ -765,10 +770,14 @@ function addMenuEventListeners() {
 
 // 메뉴 ID로 메뉴 찾기
 function findMenuById(menuId) {
-    for (const items of Object.values(menuData)) {
-        const menu = items.find((item) => item.id === menuId);
-        if (menu) return menu;
+    for (const category in menuData) {
+        const menu = menuData[category].find((item) => item.id === menuId);
+        if (menu) {
+            console.log("Found menu:", menu); // 디버깅용
+            return menu;
+        }
     }
+    console.error("Menu not found in any category:", menuId); // 디버깅용
     return null;
 }
 
