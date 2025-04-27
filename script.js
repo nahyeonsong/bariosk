@@ -603,6 +603,7 @@ function addToCart(menuId) {
             name: menu.name,
             price: menu.price,
             quantity: 1,
+            temperature: menu.temperature,
         });
     }
 
@@ -674,9 +675,9 @@ async function generateReceipt() {
     document.body.appendChild(receipt);
 
     // 온도 표시 텍스트 생성 함수
-    const getTemperatureText = (menu) => {
-        if (menu.temperature === "H") return "(H)";
-        if (menu.temperature === "I") return "(I)";
+    const getTemperatureText = (temperature) => {
+        if (temperature === "H") return "(H)";
+        if (temperature === "I") return "(I)";
         return "";
     };
 
@@ -688,10 +689,9 @@ async function generateReceipt() {
         <div class="receipt-items">
             ${cart
                 .map((item) => {
-                    const menu = findMenuById(item.id);
-                    const temperatureText = menu
-                        ? getTemperatureText(menu)
-                        : "";
+                    const temperatureText = getTemperatureText(
+                        item.temperature
+                    );
                     return `
                         <div class="receipt-item">
                             <span>${temperatureText}${
