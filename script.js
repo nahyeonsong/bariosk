@@ -673,6 +673,13 @@ async function generateReceipt() {
     receipt.style.left = "-9999px";
     document.body.appendChild(receipt);
 
+    // 온도 표시 텍스트 생성 함수
+    const getTemperatureText = (menu) => {
+        if (menu.temperature === "H") return "(H)";
+        if (menu.temperature === "I") return "(I)";
+        return "";
+    };
+
     receipt.innerHTML = `
         <div class="receipt-header">
             <h2>주문서</h2>
@@ -680,16 +687,22 @@ async function generateReceipt() {
         </div>
         <div class="receipt-items">
             ${cart
-                .map(
-                    (item) => `
-                <div class="receipt-item">
-                    <span>${item.name} x ${item.quantity}</span>
-                    <span>${(
-                        item.price * item.quantity
-                    ).toLocaleString()}원</span>
-                </div>
-            `
-                )
+                .map((item) => {
+                    const menu = findMenuById(item.id);
+                    const temperatureText = menu
+                        ? getTemperatureText(menu)
+                        : "";
+                    return `
+                        <div class="receipt-item">
+                            <span>${temperatureText}${
+                        temperatureText ? " " : ""
+                    }${item.name} x ${item.quantity}</span>
+                            <span>${(
+                                item.price * item.quantity
+                            ).toLocaleString()}원</span>
+                        </div>
+                    `;
+                })
                 .join("")}
         </div>
         <div class="receipt-total">

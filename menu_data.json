@@ -44,7 +44,8 @@
             "id": 4,
             "image": "181f048f-a48b-4e4d-a25f-9c9e80289eed.jpg",
             "name": "휘낭시에",
-            "price": "2000"
+            "price": "2000",
+            "temperature": ""
         }
     ],
     "tea": []
