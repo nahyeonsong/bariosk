@@ -427,14 +427,44 @@ function updateMenuDisplay() {
         menuData[category].forEach((menu) => {
             const menuItem = document.createElement("div");
             menuItem.className = "menu-item";
+            menuItem.draggable = isAdminMode;
+            menuItem.dataset.id = menu.id;
+            menuItem.dataset.category = category;
 
-            // 관리자 모드에서만 드래그 가능하도록 설정
+            const adminControls = isAdminMode
+                ? `
+                <div class="admin-controls">
+                    <button class="edit-btn" onclick="showEditForm(${JSON.stringify(
+                        menu
+                    ).replace(/"/g, "&quot;")}, '${category}')">수정</button>
+                    <button class="clone-btn" onclick="cloneMenuItem(${JSON.stringify(
+                        menu
+                    ).replace(/"/g, "&quot;")}, '${category}')">복제</button>
+                    <button class="delete-btn" onclick="deleteMenuItem(${
+                        menu.id
+                    }, '${category}')">삭제</button>
+                </div>
+                `
+                : "";
+
+            menuItem.innerHTML = `
+                <img src="${API_BASE_URL}/static/images/${menu.image}" alt="${
+                menu.name
+            }" onerror="this.src='${API_BASE_URL}/static/images/logo.png'">
+                <div class="menu-info">
+                    <h3>${menu.name}</h3>
+                    <p class="price">${menu.price.toLocaleString()}원</p>
+                    <p class="temperature">${getTemperatureText(
+                        menu.temperature
+                    )}</p>
+                </div>
+                ${adminControls}
+                <button class="add-to-cart" onclick="addToCart(${
+                    menu.id
+                })">담기</button>
+            `;
+
             if (isAdminMode) {
-                menuItem.draggable = true;
-                menuItem.dataset.index = menuData[category].indexOf(menu);
-                menuItem.dataset.category = category;
-
-                // 드래그 이벤트 리스너 추가
                 menuItem.addEventListener("dragstart", handleDragStart);
                 menuItem.addEventListener("dragover", handleDragOver);
                 menuItem.addEventListener("dragenter", handleDragEnter);
@@ -442,27 +472,6 @@ function updateMenuDisplay() {
                 menuItem.addEventListener("drop", handleDrop);
                 menuItem.addEventListener("dragend", handleDragEnd);
             }
-
-            // 온도 표시 텍스트 설정
-            let temperatureText = "";
-            if (menu.temperature === "H") temperatureText = "(H)";
-            else if (menu.temperature === "I") temperatureText = "(I)";
-
-            menuItem.innerHTML = `
-                ${isAdminMode ? '<div class="drag-handle"></div>' : ""}
-                <img src="static/images/${menu.image}" alt="${menu.name}">
-                <div class="menu-item-info">
-                    <h3>${temperatureText}${temperatureText ? " " : ""}${
-                menu.name
-            }</h3>
-                    <p>${menu.price}원</p>
-                    ${
-                        isAdminMode
-                            ? `<button class="edit-menu-btn" data-id="${menu.id}" data-category="${category}">수정</button>`
-                            : `<button class="add-to-cart-btn" data-id="${menu.id}">장바구니에 추가</button>`
-                    }
-                </div>
-            `;
 
             menuGrid.appendChild(menuItem);
         });
@@ -474,7 +483,7 @@ function updateMenuDisplay() {
     // 이벤트 리스너 추가
     if (isAdminMode) {
         // 수정 버튼 클릭 이벤트
-        document.querySelectorAll(".edit-menu-btn").forEach((button) => {
+        document.querySelectorAll(".edit-btn").forEach((button) => {
             button.addEventListener("click", () => {
                 const menuId = button.getAttribute("data-id");
                 const category = button.getAttribute("data-category");
@@ -488,10 +497,10 @@ function updateMenuDisplay() {
         });
     } else {
         // 장바구니 추가 버튼 클릭 이벤트
-        document.querySelectorAll(".add-to-cart-btn").forEach((button) => {
+        document.querySelectorAll(".add-to-cart").forEach((button) => {
             button.addEventListener("click", () => {
-                const menuId = button.getAttribute("data-id");
-                addToCart(parseInt(menuId));
+                const menuId = parseInt(button.getAttribute("data-id"));
+                addToCart(menuId);
             });
         });
     }
@@ -520,25 +529,48 @@ function toggleAdminMode() {
 function createMenuItem(item) {
     const menuItem = document.createElement("div");
     menuItem.className = "menu-item";
+    menuItem.draggable = isAdminMode;
     menuItem.dataset.id = item.id;
+    menuItem.dataset.category = item.category;
 
-    const buttonText = isAdminMode ? "수정" : "담기";
-    const buttonClass = isAdminMode ? "edit-menu-btn" : "add-to-cart";
+    const adminControls = isAdminMode
+        ? `
+        <div class="admin-controls">
+            <button class="edit-btn" onclick="showEditForm(${JSON.stringify(
+                item
+            ).replace(/"/g, "&quot;")}, '${item.category}')">수정</button>
+            <button class="clone-btn" onclick="cloneMenuItem(${JSON.stringify(
+                item
+            ).replace(/"/g, "&quot;")}, '${item.category}')">복제</button>
+            <button class="delete-btn" onclick="deleteMenuItem(${item.id}, '${
+              item.category
+          }')">삭제</button>
+        </div>
+        `
+        : "";
 
     menuItem.innerHTML = `
-        <img src="static/images/${item.image}" alt="${item.name}">
-        <div class="menu-item-info">
+        <img src="${API_BASE_URL}/static/images/${item.image}" alt="${
+        item.name
+    }" onerror="this.src='${API_BASE_URL}/static/images/logo.png'">
+        <div class="menu-info">
             <h3>${item.name}</h3>
-            <p>${item.price.toLocaleString()}원</p>
-            <button class="${buttonClass}">${buttonText}</button>
+            <p class="price">${item.price.toLocaleString()}원</p>
+            <p class="temperature">${getTemperatureText(item.temperature)}</p>
         </div>
+        ${adminControls}
+        <button class="add-to-cart" onclick="addToCart(${
+            item.id
+        })">담기</button>
     `;
 
-    const button = menuItem.querySelector("button");
     if (isAdminMode) {
-        button.addEventListener("click", () => showEditForm(item));
-    } else {
-        button.addEventListener("click", () => addToCart(item.id));
+        menuItem.addEventListener("dragstart", handleDragStart);
+        menuItem.addEventListener("dragover", handleDragOver);
+        menuItem.addEventListener("dragenter", handleDragEnter);
+        menuItem.addEventListener("dragleave", handleDragLeave);
+        menuItem.addEventListener("drop", handleDrop);
+        menuItem.addEventListener("dragend", handleDragEnd);
     }
 
     return menuItem;
@@ -764,7 +796,7 @@ document.getElementById("checkoutBtn").addEventListener("click", async () => {
                 alert("주문서 출력이 완료되었습니다. 주문서가 다운로드됩니다.");
             } catch (error) {
                 console.error("Error during checkout:", error);
-                alert("주문서 처리 중 오류가 발생했습니다.");
+                alert("주문서처리 중 오류가 발생했습니다.");
             }
         }
     }
@@ -881,7 +913,7 @@ document
         // 폼 데이터 생성
         const formData = new FormData();
         formData.append("category", category);
-        formData.append("name", name);
+        formData.append("name", name + " ｃ");
         formData.append("price", price);
         formData.append("temperature", temperature);
         if (image) {
@@ -920,3 +952,56 @@ function clearCart() {
 
 // 장바구니 초기화 버튼 이벤트 리스너
 document.getElementById("clearCartBtn").addEventListener("click", clearCart);
+
+// 메뉴 아이템 복제 함수 추가
+async function cloneMenuItem(menu, category) {
+    try {
+        // 새 메뉴 ID 생성
+        const newId =
+            Math.max(
+                ...Object.values(menuData)
+                    .flat()
+                    .map((item) => item.id)
+            ) + 1;
+
+        // 복제할 메뉴 데이터 생성
+        const clonedMenu = {
+            ...menu,
+            id: newId,
+            name: `${menu.name} (복제)`,
+        };
+
+        // 서버에 새 메뉴 추가
+        const formData = new FormData();
+        formData.append("category", category);
+        formData.append("name", clonedMenu.name);
+        formData.append("price", clonedMenu.price);
+        formData.append("temperature", clonedMenu.temperature);
+        if (menu.image) {
+            formData.append("image", menu.image);
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/menu`, {
+            method: "POST",
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "메뉴 복제 실패");
+        }
+
+        // 메뉴 데이터 새로고침
+        await loadMenuData();
+        alert("메뉴가 복제되었습니다.");
+    } catch (error) {
+        console.error("Error:", error);
+        if (error.message.includes("Failed to fetch")) {
+            alert(
+                "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
+            );
+        } else {
+            alert("메뉴 복제 중 오류가 발생했습니다: " + error.message);
+        }
+    }
+}
