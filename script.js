@@ -454,6 +454,10 @@ function updateMenuDisplay() {
                 `
                 : "";
 
+            const addToCartButton = !isAdminMode
+                ? `<button class="add-to-cart" onclick="addToCart(${menu.id})">담기</button>`
+                : "";
+
             menuItem.innerHTML = `
                 <img src="${API_BASE_URL}/static/images/${menu.image}" alt="${
                 menu.name
@@ -466,9 +470,7 @@ function updateMenuDisplay() {
                     )}</p>
                 </div>
                 ${adminControls}
-                <button class="add-to-cart" onclick="addToCart(${
-                    menu.id
-                })">담기</button>
+                ${addToCartButton}
             `;
 
             if (isAdminMode) {
@@ -944,7 +946,7 @@ function clearCart() {
 // 장바구니 초기화 버튼 이벤트 리스너
 document.getElementById("clearCartBtn").addEventListener("click", clearCart);
 
-// 메뉴 아이템 복제 함수 추가
+// 메뉴 아이템 복제 함수
 async function cloneMenuItem(menu, category) {
     try {
         // 새 메뉴 ID 생성
@@ -960,6 +962,7 @@ async function cloneMenuItem(menu, category) {
             ...menu,
             id: newId,
             name: `${menu.name} (복제)`,
+            temperature: menu.temperature || "H", // 온도가 없으면 기본값 'H' 설정
         };
 
         // 서버에 새 메뉴 추가
@@ -993,6 +996,38 @@ async function cloneMenuItem(menu, category) {
             );
         } else {
             alert("메뉴 복제 중 오류가 발생했습니다: " + error.message);
+        }
+    }
+}
+
+// 메뉴 삭제 함수
+async function deleteMenuItem(menuId, category) {
+    if (confirm("정말로 이 메뉴를 삭제하시겠습니까?")) {
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/api/menu/${category}/${menuId}`,
+                {
+                    method: "DELETE",
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "메뉴 삭제 실패");
+            }
+
+            // 메뉴 데이터 새로고침
+            await loadMenuData();
+            alert("메뉴가 삭제되었습니다.");
+        } catch (error) {
+            console.error("Error:", error);
+            if (error.message.includes("Failed to fetch")) {
+                alert(
+                    "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
+                );
+            } else {
+                alert("메뉴 삭제 중 오류가 발생했습니다: " + error.message);
+            }
         }
     }
 }
