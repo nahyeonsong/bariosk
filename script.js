@@ -2,8 +2,8 @@
 const API_BASE_URL =
     window.location.hostname === "nahyeonsong.github.io"
         ? "https://bariosk.onrender.com"
-        : window.location.hostname === "bariosk.com"
-        ? "https://www.bariosk.com"
+        : window.location.hostname === "www.bariosk.com"
+        ? "https://bariosk.onrender.com"
         : "http://localhost:5000";
 
 // 전역 변수
