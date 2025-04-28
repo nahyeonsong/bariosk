@@ -31,8 +31,13 @@ def load_menu_data():
         return json.load(f)
 
 def save_menu_data(data):
-    with open(MENU_DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        with open(MENU_DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        print(f"메뉴 데이터 저장 성공: {data}")  # 디버깅용 로그 추가
+    except Exception as e:
+        print(f"메뉴 데이터 저장 실패: {str(e)}")  # 디버깅용 로그 추가
+        raise
 
 def save_image(file):
     try:
@@ -98,25 +103,27 @@ def get_menu():
 def add_menu():
     try:
         menu_data = load_menu_data()
+        print(f"현재 메뉴 데이터: {menu_data}")  # 디버깅용 로그 추가
         
         # 폼 데이터에서 정보 추출
         category = request.form.get('category')
         name = request.form.get('name')
         price = int(request.form.get('price'))
         image_file = request.files.get('image')
-        temperature = request.form.get('temperature')
+        temperature = request.form.get('temperature', '')
         
-        if not all([category, name, price, temperature]):
-            return jsonify({'error': '카테고리, 이름, 가격, 온도는 필수 입력 항목입니다'}), 400
+        print(f"추가할 메뉴 정보: category={category}, name={name}, price={price}, temperature={temperature}")  # 디버깅용 로그 추가
+        
+        if not all([category, name, price]):
+            return jsonify({'error': '카테고리, 이름, 가격은 필수 입력 항목입니다'}), 400
         
         # 이미지 저장 (이미지가 있는 경우에만)
-        image_filename = "logo.png"  # 기본값으로 logo.png 설정
+        image_filename = "logo.png"
         if image_file and image_file.filename != '':
             try:
                 image_filename = save_image(image_file)
             except Exception as e:
                 print(f"이미지 저장 실패: {str(e)}")
-                # 이미지 저장 실패 시에도 계속 진행
         
         # 새 메뉴 ID 생성
         new_id = generate_new_menu_id(menu_data)
@@ -126,9 +133,11 @@ def add_menu():
             "id": new_id,
             "name": name,
             "price": price,
-            "image": image_filename,  # 이미지가 없으면 기본 이미지 사용
+            "image": image_filename,
             "temperature": temperature
         }
+        
+        print(f"생성된 메뉴 항목: {menu}")  # 디버깅용 로그 추가
         
         # 카테고리가 없으면 새로 생성
         if category not in menu_data:
@@ -137,13 +146,15 @@ def add_menu():
         # 메뉴 추가
         menu_data[category].append(menu)
         
+        print(f"저장할 메뉴 데이터: {menu_data}")  # 디버깅용 로그 추가
+        
         # 데이터 저장
         save_menu_data(menu_data)
         
         return jsonify({'message': '메뉴가 추가되었습니다'}), 201
     
     except Exception as e:
-        print(f"메뉴 추가 중 오류 발생: {str(e)}")  # 디버깅을 위한 로그 추가
+        print(f"메뉴 추가 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/menu/<category>/<int:menu_id>', methods=['PUT'])
