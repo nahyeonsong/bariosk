@@ -126,7 +126,7 @@ def add_menu():
             "id": new_id,
             "name": name,
             "price": price,
-            "image": image_filename,  # 이미지가 없으면 None
+            "image": image_filename if image_filename else "logo.png",  # 이미지가 없으면 기본 이미지 사용
             "temperature": temperature
         }
         
@@ -143,6 +143,7 @@ def add_menu():
         return jsonify({'message': '메뉴가 추가되었습니다'}), 201
     
     except Exception as e:
+        print(f"메뉴 추가 중 오류 발생: {str(e)}")  # 디버깅을 위한 로그 추가
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/menu/<category>/<int:menu_id>', methods=['PUT'])
