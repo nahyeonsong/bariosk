@@ -826,7 +826,7 @@ function findMenuById(menuId) {
 // 드래그 앤 드롭 이벤트 핸들러
 function handleDragStart(e) {
     draggedItem = this;
-    dragStartIndex = parseInt(this.dataset.index);
+    dragStartIndex = Array.from(this.parentNode.children).indexOf(this);
     this.classList.add("dragging");
 }
 
@@ -845,22 +845,35 @@ function handleDragLeave() {
 
 async function handleDrop() {
     this.classList.remove("drag-over");
-    const dragEndIndex = parseInt(this.dataset.index);
+    const dragEndIndex = Array.from(this.parentNode.children).indexOf(this);
+    const category = this.dataset.category;
 
     if (dragStartIndex !== dragEndIndex) {
         // 메뉴 데이터 업데이트
-        const category = this.dataset.category;
-
-        // 항목 순서 변경
         const items = menuData[category];
         const [movedItem] = items.splice(dragStartIndex, 1);
         items.splice(dragEndIndex, 0, movedItem);
 
         // 변경된 데이터 저장
-        await saveMenuData(menuData);
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/menu`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(menuData),
+            });
 
-        // UI 업데이트
-        updateMenuDisplay();
+            if (!response.ok) {
+                throw new Error("메뉴 순서 저장 실패");
+            }
+
+            // UI 업데이트
+            updateMenuDisplay();
+        } catch (error) {
+            console.error("Error:", error);
+            alert("메뉴 순서 저장 중 오류가 발생했습니다.");
+        }
     }
 }
 
@@ -869,29 +882,6 @@ function handleDragEnd() {
     document.querySelectorAll(".menu-item").forEach((item) => {
         item.classList.remove("drag-over");
     });
-}
-
-// 메뉴 데이터 저장 함수
-async function saveMenuData(menuData) {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/menu`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(menuData),
-        });
-
-        if (!response.ok) {
-            throw new Error("메뉴 순서 저장 실패");
-        }
-
-        const data = await response.json();
-        console.log("메뉴 순서가 저장되었습니다:", data);
-    } catch (error) {
-        console.error("메뉴 순서 저장 중 오류 발생:", error);
-        alert("메뉴 순서 저장 중 오류가 발생했습니다.");
-    }
 }
 
 // 메뉴 복제 기능
