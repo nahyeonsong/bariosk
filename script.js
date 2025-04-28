@@ -905,3 +905,16 @@ document
             alert("메뉴 복제 중 오류가 발생했습니다.");
         }
     });
+
+// 장바구니 초기화
+function clearCart() {
+    if (cart.length > 0) {
+        if (confirm("장바구니를 비우시겠습니까?")) {
+            cart = [];
+            updateCart();
+        }
+    }
+}
+
+// 장바구니 초기화 버튼 이벤트 리스너
+document.getElementById("clearCartBtn").addEventListener("click", clearCart);
