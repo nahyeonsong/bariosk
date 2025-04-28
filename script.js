@@ -381,6 +381,13 @@ function renderCategoryList(categories) {
     });
 }
 
+// 온도 표시 텍스트 생성 함수
+function getTemperatureText(temperature) {
+    if (temperature === "H") return "(H)";
+    if (temperature === "I") return "(I)";
+    return "";
+}
+
 // 메뉴 데이터 로드
 async function loadMenuData() {
     try {
@@ -677,26 +684,17 @@ function updateCart() {
     cartItems.innerHTML = "";
     let total = 0;
 
-    // 온도 표시 텍스트 생성 함수
-    const getTemperatureText = (temperature) => {
-        if (temperature === "H") return "(H)";
-        if (temperature === "I") return "(I)";
-        return "";
-    };
-
     cart.forEach((item) => {
         const itemTotal = item.price * item.quantity;
         total += itemTotal;
-
-        const temperatureText = getTemperatureText(item.temperature);
 
         const cartItem = document.createElement("div");
         cartItem.className = "cart-item";
         cartItem.innerHTML = `
             <div class="cart-item-info">
-                <div>${temperatureText}${temperatureText ? " " : ""}${
-            item.name
-        }</div>
+                <div>${getTemperatureText(item.temperature)}${
+            getTemperatureText(item.temperature) ? " " : ""
+        }${item.name}</div>
                 <div>${item.price.toLocaleString()}원</div>
             </div>
             <div class="cart-item-quantity">
@@ -723,13 +721,6 @@ async function generateReceipt() {
     receipt.style.position = "absolute";
     receipt.style.left = "-9999px";
     document.body.appendChild(receipt);
-
-    // 온도 표시 텍스트 생성 함수
-    const getTemperatureText = (temperature) => {
-        if (temperature === "H") return "(H)";
-        if (temperature === "I") return "(I)";
-        return "";
-    };
 
     receipt.innerHTML = `
         <div class="receipt-header">
