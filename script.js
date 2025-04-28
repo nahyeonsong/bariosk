@@ -441,9 +441,9 @@ function updateMenuDisplay() {
             const adminControls = isAdminMode
                 ? `
                 <div class="admin-controls">
-                    <button class="edit-btn" onclick="showEditForm(${JSON.stringify(
-                        menu
-                    ).replace(/"/g, "&quot;")}, '${category}')">수정</button>
+                    <button class="edit-btn" data-id="${
+                        menu.id
+                    }" data-category="${category}">수정</button>
                     <button class="clone-btn" onclick="cloneMenuItem(${JSON.stringify(
                         menu
                     ).replace(/"/g, "&quot;")}, '${category}')">복제</button>
@@ -545,9 +545,9 @@ function createMenuItem(item) {
     const adminControls = isAdminMode
         ? `
         <div class="admin-controls">
-            <button class="edit-btn" onclick="showEditForm(${JSON.stringify(
-                item
-            ).replace(/"/g, "&quot;")}, '${item.category}')">수정</button>
+            <button class="edit-btn" data-id="${item.id}" data-category="${
+              item.category
+          }">수정</button>
             <button class="clone-btn" onclick="cloneMenuItem(${JSON.stringify(
                 item
             ).replace(/"/g, "&quot;")}, '${item.category}')">복제</button>
@@ -556,6 +556,10 @@ function createMenuItem(item) {
           }')">삭제</button>
         </div>
         `
+        : "";
+
+    const addToCartButton = !isAdminMode
+        ? `<button class="add-to-cart" onclick="addToCart(${item.id})">담기</button>`
         : "";
 
     menuItem.innerHTML = `
@@ -568,9 +572,7 @@ function createMenuItem(item) {
             <p class="temperature">${getTemperatureText(item.temperature)}</p>
         </div>
         ${adminControls}
-        <button class="add-to-cart" onclick="addToCart(${
-            item.id
-        })">담기</button>
+        ${addToCartButton}
     `;
 
     if (isAdminMode) {
