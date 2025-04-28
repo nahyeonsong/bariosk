@@ -756,14 +756,16 @@ async function generateReceipt() {
 // 결제 버튼 이벤트 리스너
 document.getElementById("checkoutBtn").addEventListener("click", async () => {
     if (cart.length > 0) {
-        try {
-            await generateReceipt();
-            cart = [];
-            updateCart();
-            alert("결제가 완료되었습니다. 주문서가 다운로드됩니다.");
-        } catch (error) {
-            console.error("Error during checkout:", error);
-            alert("결제 처리 중 오류가 발생했습니다.");
+        if (confirm("주문서를 출력하시겠습니까?")) {
+            try {
+                await generateReceipt();
+                cart = [];
+                updateCart();
+                alert("주문서 출력이 완료되었습니다. 주문서가 다운로드됩니다.");
+            } catch (error) {
+                console.error("Error during checkout:", error);
+                alert("주문서 처리 중 오류가 발생했습니다.");
+            }
         }
     }
 });
