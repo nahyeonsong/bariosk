@@ -864,3 +864,44 @@ async function saveMenuData(menuData) {
         alert("메뉴 순서 저장 중 오류가 발생했습니다.");
     }
 }
+
+// 메뉴 복제 기능
+document
+    .getElementById("cloneMenu")
+    .addEventListener("click", async function () {
+        const menuId = document.getElementById("editMenuId").value;
+        const category = document.getElementById("editCategory").value;
+        const name = document.getElementById("editName").value;
+        const price = document.getElementById("editPrice").value;
+        const temperature = document.getElementById("editTemperature").value;
+        const image = document.getElementById("editImage").files[0];
+
+        // 폼 데이터 생성
+        const formData = new FormData();
+        formData.append("category", category);
+        formData.append("name", name + " (복제)");
+        formData.append("price", price);
+        formData.append("temperature", temperature);
+        if (image) {
+            formData.append("image", image);
+        }
+
+        try {
+            const response = await fetch("/api/menu", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (response.ok) {
+                alert("메뉴가 복제되었습니다.");
+                loadMenuData();
+                document.getElementById("editMenuForm").style.display = "none";
+            } else {
+                const error = await response.json();
+                alert(error.error || "메뉴 복제 중 오류가 발생했습니다.");
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            alert("메뉴 복제 중 오류가 발생했습니다.");
+        }
+    });
