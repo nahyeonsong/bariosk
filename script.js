@@ -881,7 +881,7 @@ document
         // 폼 데이터 생성
         const formData = new FormData();
         formData.append("category", category);
-        formData.append("name", name + " ｃ");
+        formData.append("name", name);
         formData.append("price", price);
         formData.append("temperature", temperature);
         if (image) {
