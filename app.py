@@ -112,7 +112,11 @@ def add_menu():
         # 이미지 저장 (이미지가 있는 경우에만)
         image_filename = None
         if image_file and image_file.filename != '':
-            image_filename = save_image(image_file)
+            try:
+                image_filename = save_image(image_file)
+            except Exception as e:
+                print(f"이미지 저장 실패: {str(e)}")
+                # 이미지 저장 실패 시에도 계속 진행
         
         # 새 메뉴 ID 생성
         new_id = generate_new_menu_id(menu_data)
