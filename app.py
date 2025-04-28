@@ -110,7 +110,7 @@ def add_menu():
             return jsonify({'error': '카테고리, 이름, 가격, 온도는 필수 입력 항목입니다'}), 400
         
         # 이미지 저장 (이미지가 있는 경우에만)
-        image_filename = None
+        image_filename = "logo.png"  # 기본값으로 logo.png 설정
         if image_file and image_file.filename != '':
             try:
                 image_filename = save_image(image_file)
@@ -126,7 +126,7 @@ def add_menu():
             "id": new_id,
             "name": name,
             "price": price,
-            "image": image_filename if image_filename else "logo.png",  # 이미지가 없으면 기본 이미지 사용
+            "image": image_filename,  # 이미지가 없으면 기본 이미지 사용
             "temperature": temperature
         }
         
