@@ -906,7 +906,7 @@ document
         // 폼 데이터 생성
         const formData = new FormData();
         formData.append("category", category);
-        formData.append("name", name + " ｃ");
+        formData.append("name", name);
         formData.append("price", price);
         formData.append("temperature", temperature);
         if (image) {
@@ -961,8 +961,8 @@ async function cloneMenuItem(menu, category) {
         const clonedMenu = {
             ...menu,
             id: newId,
-            name: `${menu.name} (복제)`,
-            temperature: menu.temperature || "H", // 온도가 없으면 기본값 'H' 설정
+            name: `${menu.name}`,
+            temperature: menu.temperature || "", // 온도가 없으면 기본값 '' 설정
         };
 
         // 서버에 새 메뉴 추가
