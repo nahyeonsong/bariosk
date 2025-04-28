@@ -879,7 +879,7 @@ document
         // 폼 데이터 생성
         const formData = new FormData();
         formData.append("category", category);
-        formData.append("name", name + " (복제)");
+        formData.append("name", name + " ｃ");
         formData.append("price", price);
         formData.append("temperature", temperature);
         if (image) {
