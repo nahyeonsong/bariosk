@@ -106,11 +106,13 @@ def add_menu():
         image_file = request.files.get('image')
         temperature = request.form.get('temperature')
         
-        if not all([category, name, price, image_file, temperature]):
-            return jsonify({'error': '모든 필드를 입력해주세요'}), 400
+        if not all([category, name, price, temperature]):
+            return jsonify({'error': '카테고리, 이름, 가격, 온도는 필수 입력 항목입니다'}), 400
         
-        # 이미지 저장
-        image_filename = save_image(image_file)
+        # 이미지 저장 (이미지가 있는 경우에만)
+        image_filename = None
+        if image_file and image_file.filename != '':
+            image_filename = save_image(image_file)
         
         # 새 메뉴 ID 생성
         new_id = generate_new_menu_id(menu_data)
@@ -120,7 +122,7 @@ def add_menu():
             "id": new_id,
             "name": name,
             "price": price,
-            "image": image_filename,
+            "image": image_filename,  # 이미지가 없으면 None
             "temperature": temperature
         }
         
