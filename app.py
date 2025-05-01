@@ -6,7 +6,9 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 import io
 import uuid
-import base64 
+import base64
+import sqlite3
+from datetime import datetime
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -14,41 +16,79 @@ CORS(app)
 # 설정
 UPLOAD_FOLDER = os.path.join('static', 'images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+DATABASE = 'menu.db'
+
+def get_db():
+    db = sqlite3.connect(DATABASE)
+    db.row_factory = sqlite3.Row
+    return db
+
+def init_db():
+    with get_db() as db:
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS menu (
+                id INTEGER PRIMARY KEY,
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                price TEXT NOT NULL,
+                image TEXT NOT NULL,
+                temperature TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        db.commit()
+
+def load_menu_data():
+    try:
+        with get_db() as db:
+            cursor = db.execute('SELECT * FROM menu ORDER BY category, id')
+            menu_data = {}
+            for row in cursor:
+                category = row['category']
+                if category not in menu_data:
+                    menu_data[category] = []
+                menu_data[category].append({
+                    'id': row['id'],
+                    'name': row['name'],
+                    'price': row['price'],
+                    'image': row['image'],
+                    'temperature': row['temperature']
+                })
+            print(f"메뉴 데이터 로드 성공: {menu_data}")
+            return menu_data
+    except Exception as e:
+        print(f"메뉴 데이터 로드 실패: {str(e)}")
+        raise
+
+def save_menu_data(data):
+    try:
+        with get_db() as db:
+            # 기존 데이터 삭제
+            db.execute('DELETE FROM menu')
+            
+            # 새 데이터 저장
+            for category, items in data.items():
+                for item in items:
+                    db.execute(
+                        'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
+                        (item['id'], category, item['name'], item['price'], item['image'], item['temperature'])
+                    )
+            db.commit()
+            print(f"메뉴 데이터 저장 성공: {data}")
+    except Exception as e:
+        print(f"메뉴 데이터 저장 실패: {str(e)}")
+        raise
+
+# 서버 시작 시 데이터베이스 초기화
+@app.before_first_request
+def before_first_request():
+    init_db()
 
 # 허용된 파일 확장자
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'avif'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# 메뉴 데이터 파일 경로
-MENU_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'menu_data.json')
-
-def load_menu_data():
-    try:
-        if not os.path.exists(MENU_DATA_FILE):
-            print(f"메뉴 데이터 파일이 없습니다. 새로 생성합니다: {MENU_DATA_FILE}")
-            initialize_menu_data()
-        with open(MENU_DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            print(f"메뉴 데이터 로드 성공: {data}")  # 디버깅용 로그
-            return data
-    except Exception as e:
-        print(f"메뉴 데이터 로드 실패: {str(e)}")  # 디버깅용 로그
-        raise
-
-def save_menu_data(data):
-    try:
-        # 디렉토리가 없으면 생성
-        os.makedirs(os.path.dirname(MENU_DATA_FILE), exist_ok=True)
-        
-        # 데이터 저장
-        with open(MENU_DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        print(f"메뉴 데이터 저장 성공: {data}")  # 디버깅용 로그
-    except Exception as e:
-        print(f"메뉴 데이터 저장 실패: {str(e)}")  # 디버깅용 로그
-        raise
 
 def save_image(file):
     try:

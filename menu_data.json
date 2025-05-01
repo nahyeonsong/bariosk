@@ -27,6 +27,20 @@
             "price": "2500",
             "image": "c3c86ed4-335c-4a58-b838-126ed2675bfb.jpg",
             "temperature": "I"
+        },
+        {
+            "id": 7,
+            "name": "돌체라떼",
+            "price": "3000",
+            "image": "logo.png",
+            "temperature": "H"
+        },
+        {
+            "id": 8,
+            "name": "돌체라떼",
+            "price": "3000",
+            "image": "logo.png",
+            "temperature": "I"
         }
     ],
     "non-coffee": [
