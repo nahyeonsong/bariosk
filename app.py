@@ -22,21 +22,32 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # 메뉴 데이터 파일 경로
-MENU_DATA_FILE = 'menu_data.json'
+MENU_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'menu_data.json')
 
 def load_menu_data():
-    if not os.path.exists(MENU_DATA_FILE):
-        initialize_menu_data()
-    with open(MENU_DATA_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    try:
+        if not os.path.exists(MENU_DATA_FILE):
+            print(f"메뉴 데이터 파일이 없습니다. 새로 생성합니다: {MENU_DATA_FILE}")
+            initialize_menu_data()
+        with open(MENU_DATA_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            print(f"메뉴 데이터 로드 성공: {data}")  # 디버깅용 로그
+            return data
+    except Exception as e:
+        print(f"메뉴 데이터 로드 실패: {str(e)}")  # 디버깅용 로그
+        raise
 
 def save_menu_data(data):
     try:
+        # 디렉토리가 없으면 생성
+        os.makedirs(os.path.dirname(MENU_DATA_FILE), exist_ok=True)
+        
+        # 데이터 저장
         with open(MENU_DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-        print(f"메뉴 데이터 저장 성공: {data}")  # 디버깅용 로그 추가
+        print(f"메뉴 데이터 저장 성공: {data}")  # 디버깅용 로그
     except Exception as e:
-        print(f"메뉴 데이터 저장 실패: {str(e)}")  # 디버깅용 로그 추가
+        print(f"메뉴 데이터 저장 실패: {str(e)}")  # 디버깅용 로그
         raise
 
 def save_image(file):
