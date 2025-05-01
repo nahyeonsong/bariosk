@@ -79,16 +79,15 @@ def save_menu_data(data):
         print(f"메뉴 데이터 저장 실패: {str(e)}")
         raise
 
-# 서버 시작 시 데이터베이스 초기화
-@app.before_first_request
-def before_first_request():
-    init_db()
-
 # 허용된 파일 확장자
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'avif'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# 데이터베이스 초기화
+with app.app_context():
+    init_db()
 
 def save_image(file):
     try:
