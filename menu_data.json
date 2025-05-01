@@ -24,7 +24,7 @@
         {
             "id": 6,
             "name": "카페라떼",
-            "price": 2500,
+            "price": "2500",
             "image": "c3c86ed4-335c-4a58-b838-126ed2675bfb.jpg",
             "temperature": "I"
         }

@@ -175,9 +175,9 @@ def update_menu(category, menu_id):
         
         # 업데이트할 정보
         name = request.form.get('name', menu['name'])
-        price = request.form.get('price', menu['price'])
+        price = request.form.get('price', menu['price'])  # 문자열로 처리
         new_category = request.form.get('category', category)
-        temperature = request.form.get('temperature', menu.get('temperature', 'H'))  # 기본값 'H' 추가
+        temperature = request.form.get('temperature', menu.get('temperature', 'H'))
         
         # 이미지 업데이트
         if 'image' in request.files:
@@ -194,7 +194,7 @@ def update_menu(category, menu_id):
         
         # 메뉴 정보 업데이트
         menu['name'] = name
-        menu['price'] = price
+        menu['price'] = price  # 문자열로 저장
         menu['temperature'] = temperature
         
         # 카테고리가 변경된 경우
@@ -208,7 +208,10 @@ def update_menu(category, menu_id):
         else:
             menu_data[category][menu_index] = menu
         
+        # 변경사항 저장
         save_menu_data(menu_data)
+        print(f"메뉴 수정 완료: {menu}")  # 디버깅용 로그 추가
+        
         return jsonify(menu)
     except Exception as e:
         print(f"메뉴 수정 중 오류 발생: {str(e)}")
