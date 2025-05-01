@@ -9,6 +9,7 @@ import uuid
 import base64
 import sqlite3
 from datetime import datetime
+import shutil
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -16,27 +17,36 @@ CORS(app)
 # 설정
 UPLOAD_FOLDER = os.path.join('static', 'images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-DATABASE = 'menu.db'
+DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'menu.db')
 
 def get_db():
-    db = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row
-    return db
+    try:
+        db = sqlite3.connect(DATABASE)
+        db.row_factory = sqlite3.Row
+        return db
+    except Exception as e:
+        print(f"데이터베이스 연결 실패: {str(e)}")
+        raise
 
 def init_db():
-    with get_db() as db:
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS menu (
-                id INTEGER PRIMARY KEY,
-                category TEXT NOT NULL,
-                name TEXT NOT NULL,
-                price TEXT NOT NULL,
-                image TEXT NOT NULL,
-                temperature TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        db.commit()
+    try:
+        with get_db() as db:
+            db.execute('''
+                CREATE TABLE IF NOT EXISTS menu (
+                    id INTEGER PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    price TEXT NOT NULL,
+                    image TEXT NOT NULL,
+                    temperature TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            db.commit()
+            print("데이터베이스 초기화 성공")
+    except Exception as e:
+        print(f"데이터베이스 초기화 실패: {str(e)}")
+        raise
 
 def load_menu_data():
     try:
@@ -54,19 +64,15 @@ def load_menu_data():
                     'image': row['image'],
                     'temperature': row['temperature']
                 })
-            print(f"메뉴 데이터 로드 성공: {menu_data}")
             return menu_data
     except Exception as e:
         print(f"메뉴 데이터 로드 실패: {str(e)}")
-        raise
+        return {}
 
 def save_menu_data(data):
     try:
         with get_db() as db:
-            # 기존 데이터 삭제
             db.execute('DELETE FROM menu')
-            
-            # 새 데이터 저장
             for category, items in data.items():
                 for item in items:
                     db.execute(
@@ -74,7 +80,7 @@ def save_menu_data(data):
                         (item['id'], category, item['name'], item['price'], item['image'], item['temperature'])
                     )
             db.commit()
-            print(f"메뉴 데이터 저장 성공: {data}")
+            print("메뉴 데이터 저장 성공")
     except Exception as e:
         print(f"메뉴 데이터 저장 실패: {str(e)}")
         raise
@@ -133,7 +139,7 @@ def save_image(file):
         
     except Exception as e:
         print(f"이미지 저장 실패: {str(e)}")
-        raise
+        return "logo.png"
 
 @app.route('/')
 def index():
@@ -455,14 +461,69 @@ def initialize_menu_data():
     }
     save_menu_data(initial_data)
 
+def backup_json_file():
+    try:
+        json_file = 'menu_data.json'
+        if os.path.exists(json_file):
+            # 백업 파일명 생성 (날짜_시간 포함)
+            backup_filename = f'menu_data_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+            # 백업 디렉토리 생성
+            backup_dir = 'backups'
+            if not os.path.exists(backup_dir):
+                os.makedirs(backup_dir)
+            # 파일 복사
+            shutil.copy2(json_file, os.path.join(backup_dir, backup_filename))
+            print(f"JSON 파일 백업 완료: {backup_filename}")
+    except Exception as e:
+        print(f"JSON 파일 백업 실패: {str(e)}")
+
+def migrate_json_to_db():
+    try:
+        # JSON 파일에서 데이터 로드
+        json_file = 'menu_data.json'
+        if os.path.exists(json_file):
+            with open(json_file, 'r', encoding='utf-8') as f:
+                menu_data = json.load(f)
+                print(f"JSON 데이터 로드 성공: {menu_data}")
+                
+                # 데이터베이스에 저장
+                with get_db() as db:
+                    # 기존 데이터 삭제
+                    db.execute('DELETE FROM menu')
+                    
+                    # 새 데이터 저장
+                    for category, items in menu_data.items():
+                        for item in items:
+                            db.execute(
+                                'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
+                                (item['id'], category, item['name'], item['price'], item['image'], item.get('temperature', ''))
+                            )
+                    db.commit()
+                    print("JSON 데이터 마이그레이션 성공")
+                    
+                    # 마이그레이션 성공 후 JSON 파일 백업
+                    backup_json_file()
+        else:
+            print("JSON 파일이 존재하지 않습니다.")
+    except Exception as e:
+        print(f"JSON 데이터 마이그레이션 실패: {str(e)}")
+
+# 서버 실행
 if __name__ == '__main__':
-    # 서버 시작 시 static/images 디렉토리 확인
-    if not os.path.exists(UPLOAD_FOLDER):
-        os.makedirs(UPLOAD_FOLDER)
-    
-    # 데이터베이스 초기화
-    init_db()
-    
-    # 서버 실행
-    port = int(os.environ.get('PORT', 5000))
-    app.run(debug=True, host='0.0.0.0', port=port) 
+    try:
+        # 디렉토리 생성
+        if not os.path.exists(UPLOAD_FOLDER):
+            os.makedirs(UPLOAD_FOLDER)
+        
+        # 데이터베이스 초기화
+        init_db()
+        
+        # JSON 데이터 마이그레이션
+        migrate_json_to_db()
+        
+        # 서버 실행
+        port = int(os.environ.get('PORT', 5000))
+        print(f"서버 시작: 포트 {port}")
+        app.run(debug=True, host='0.0.0.0', port=port)
+    except Exception as e:
+        print(f"서버 시작 실패: {str(e)}") 
