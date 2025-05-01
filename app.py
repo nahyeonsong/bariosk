@@ -108,7 +108,7 @@ def add_menu():
         # 폼 데이터에서 정보 추출
         category = request.form.get('category')
         name = request.form.get('name')
-        price = int(request.form.get('price'))
+        price = request.form.get('price')  # 문자열로 받기
         image_file = request.files.get('image')
         temperature = request.form.get('temperature', '')
         
@@ -133,7 +133,7 @@ def add_menu():
         menu = {
             "id": new_id,
             "name": name,
-            "price": price,
+            "price": price,  # 문자열로 저장
             "image": image_filename,
             "temperature": temperature
         }
