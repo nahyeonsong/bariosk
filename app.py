@@ -459,4 +459,10 @@ if __name__ == '__main__':
     # 서버 시작 시 static/images 디렉토리 확인
     if not os.path.exists(UPLOAD_FOLDER):
         os.makedirs(UPLOAD_FOLDER)
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    
+    # 데이터베이스 초기화
+    init_db()
+    
+    # 서버 실행
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port) 
