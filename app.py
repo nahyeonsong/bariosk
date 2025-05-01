@@ -17,10 +17,25 @@ CORS(app)
 # 설정
 UPLOAD_FOLDER = os.path.join('static', 'images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'menu.db')
+
+# 데이터베이스 파일 경로 설정
+if os.environ.get('RENDER'):
+    # Render 환경
+    DATABASE = '/data/menu.db'
+else:
+    # 로컬 환경
+    DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'menu.db')
+
+print(f"데이터베이스 경로: {DATABASE}")  # 디버깅용
 
 def get_db():
     try:
+        # 데이터베이스 디렉토리 확인 및 생성
+        db_dir = os.path.dirname(DATABASE)
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir)
+            print(f"데이터베이스 디렉토리 생성: {db_dir}")
+
         db = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
         return db
@@ -64,6 +79,7 @@ def load_menu_data():
                     'image': row['image'],
                     'temperature': row['temperature']
                 })
+            print(f"메뉴 데이터 로드 성공: {menu_data}")  # 디버깅용
             return menu_data
     except Exception as e:
         print(f"메뉴 데이터 로드 실패: {str(e)}")
@@ -72,15 +88,18 @@ def load_menu_data():
 def save_menu_data(data):
     try:
         with get_db() as db:
+            # 기존 데이터 삭제
             db.execute('DELETE FROM menu')
+            
+            # 새 데이터 저장
             for category, items in data.items():
                 for item in items:
                     db.execute(
                         'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
-                        (item['id'], category, item['name'], item['price'], item['image'], item['temperature'])
+                        (item['id'], category, item['name'], item['price'], item['image'], item.get('temperature', ''))
                     )
             db.commit()
-            print("메뉴 데이터 저장 성공")
+            print(f"메뉴 데이터 저장 성공: {data}")  # 디버깅용
     except Exception as e:
         print(f"메뉴 데이터 저장 실패: {str(e)}")
         raise
