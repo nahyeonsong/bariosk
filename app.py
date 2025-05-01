@@ -527,12 +527,38 @@ def migrate_json_to_db():
     except Exception as e:
         print(f"JSON 데이터 마이그레이션 실패: {str(e)}")
 
+def create_default_logo():
+    try:
+        # 기본 이미지 디렉토리 확인 및 생성
+        if not os.path.exists(app.config['UPLOAD_FOLDER']):
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        
+        # 기본 이미지 경로
+        logo_path = os.path.join(app.config['UPLOAD_FOLDER'], 'logo.png')
+        
+        # 이미지가 이미 존재하는지 확인
+        if os.path.exists(logo_path):
+            print("기본 로고 이미지가 이미 존재합니다.")
+            return
+        
+        # 기본 이미지 생성 (회색 배경의 200x200 이미지)
+        img = Image.new('RGB', (200, 200), color='#CCCCCC')
+        
+        # 이미지 저장
+        img.save(logo_path, 'PNG')
+        print(f"기본 로고 이미지 생성 완료: {logo_path}")
+    except Exception as e:
+        print(f"기본 로고 이미지 생성 실패: {str(e)}")
+
 # 서버 실행
 if __name__ == '__main__':
     try:
         # 디렉토리 생성
         if not os.path.exists(UPLOAD_FOLDER):
             os.makedirs(UPLOAD_FOLDER)
+        
+        # 기본 로고 이미지 생성
+        create_default_logo()
         
         # 데이터베이스 초기화
         init_db()
