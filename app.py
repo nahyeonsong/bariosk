@@ -118,12 +118,13 @@ def add_menu():
             return jsonify({'error': '카테고리, 이름, 가격은 필수 입력 항목입니다'}), 400
         
         # 이미지 저장 (이미지가 있는 경우에만)
-        image_filename = "logo.png"
+        image_filename = "logo.png"  # 기본 이미지
         if image_file and image_file.filename != '':
             try:
                 image_filename = save_image(image_file)
             except Exception as e:
                 print(f"이미지 저장 실패: {str(e)}")
+                # 이미지 저장 실패 시에도 기본 이미지 사용
         
         # 새 메뉴 ID 생성
         new_id = generate_new_menu_id(menu_data)
