@@ -21,7 +21,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # 데이터베이스 파일 경로 설정
 if os.environ.get('RENDER'):
     # Render 환경
-    DATABASE = '/data/menu.db'
+    DATABASE = os.path.join(os.environ.get('RENDER_DISK_PATH', '/opt/render/project/src'), 'menu.db')
 else:
     # 로컬 환경
     DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'menu.db')
