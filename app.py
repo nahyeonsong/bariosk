@@ -36,8 +36,15 @@ def get_db():
             os.makedirs(db_dir)
             print(f"데이터베이스 디렉토리 생성: {db_dir}")
 
+        # 데이터베이스 파일 존재 여부 확인
+        if not os.path.exists(DATABASE):
+            print(f"데이터베이스 파일이 존재하지 않습니다: {DATABASE}")
+        else:
+            print(f"데이터베이스 파일이 존재합니다: {DATABASE}")
+
         db = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
+        print("데이터베이스 연결 성공")
         return db
     except Exception as e:
         print(f"데이터베이스 연결 실패: {str(e)}")
@@ -87,19 +94,38 @@ def load_menu_data():
 
 def save_menu_data(data):
     try:
+        print(f"저장할 메뉴 데이터: {data}")  # 디버깅용
         with get_db() as db:
             # 기존 데이터 삭제
             db.execute('DELETE FROM menu')
+            print("기존 데이터 삭제 완료")
             
             # 새 데이터 저장
             for category, items in data.items():
                 for item in items:
-                    db.execute(
-                        'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
-                        (item['id'], category, item['name'], item['price'], item['image'], item.get('temperature', ''))
-                    )
+                    try:
+                        # 각 필드의 값 확인
+                        print(f"저장할 항목: id={item['id']}, category={category}, name={item['name']}, price={item['price']}, image={item['image']}, temperature={item.get('temperature', '')}")
+                        
+                        db.execute(
+                            'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
+                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''))
+                        )
+                        print(f"메뉴 항목 저장 성공: {item['name']}")
+                    except Exception as e:
+                        print(f"메뉴 항목 저장 실패: {str(e)}")
+                        raise
+            
             db.commit()
-            print(f"메뉴 데이터 저장 성공: {data}")  # 디버깅용
+            print("모든 메뉴 데이터 저장 완료")
+            
+            # 저장된 데이터 확인
+            cursor = db.execute('SELECT * FROM menu')
+            saved_data = cursor.fetchall()
+            print(f"저장된 데이터 확인: {len(saved_data)}개 항목")
+            for row in saved_data:
+                print(f"저장된 항목: {dict(row)}")
+            
     except Exception as e:
         print(f"메뉴 데이터 저장 실패: {str(e)}")
         raise
@@ -208,7 +234,7 @@ def add_menu():
         menu = {
             "id": new_id,
             "name": name,
-            "price": price,  # 문자열로 저장
+            "price": str(price),  # 문자열로 저장
             "image": image_filename,
             "temperature": temperature
         }
