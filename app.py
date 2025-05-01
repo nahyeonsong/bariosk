@@ -519,8 +519,12 @@ def backup_json_file():
             # 파일 복사
             shutil.copy2(json_file, os.path.join(backup_dir, backup_filename))
             print(f"JSON 파일 백업 완료: {backup_filename}")
+            
+            # 원본 파일 삭제
+            os.remove(json_file)
+            print(f"원본 JSON 파일 삭제 완료: {json_file}")
     except Exception as e:
-        print(f"JSON 파일 백업 실패: {str(e)}")
+        print(f"JSON 파일 백업/삭제 실패: {str(e)}")
 
 def migrate_json_to_db():
     try:
