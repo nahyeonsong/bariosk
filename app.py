@@ -10,6 +10,7 @@ import base64
 import sqlite3
 from datetime import datetime
 import shutil
+import requests
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -35,6 +36,10 @@ else:
         print(f"로컬 데이터 디렉토리 생성: {data_dir}")
     DATABASE = os.path.join(data_dir, 'menu.db')
     print(f"로컬 환경 감지됨. 데이터베이스 경로: {DATABASE}")
+    
+    # Render API URL 설정
+    RENDER_API_URL = "https://bariosk.onrender.com"  # Render 서버 URL
+    print(f"로컬 환경 감지됨. Render API URL: {RENDER_API_URL}")
 
 def get_db():
     try:
@@ -242,42 +247,77 @@ def save_image(file):
 def index():
     return send_from_directory('.', 'index.html')
 
+def get_menu_from_render():
+    try:
+        response = requests.get(f"{RENDER_API_URL}/api/menu")
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Render 서버에서 메뉴 데이터를 가져오는데 실패했습니다: {response.status_code}")
+            return {}
+    except Exception as e:
+        print(f"Render 서버 연결 실패: {str(e)}")
+        return {}
+
+def save_menu_to_render(data):
+    try:
+        response = requests.put(f"{RENDER_API_URL}/api/menu", json=data)
+        if response.status_code == 200:
+            print("메뉴 데이터가 Render 서버에 저장되었습니다.")
+            return True
+        else:
+            print(f"Render 서버에 메뉴 데이터를 저장하는데 실패했습니다: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"Render 서버 연결 실패: {str(e)}")
+        return False
+
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
     try:
-        menu_data = load_menu_data()
-        print("Sending menu data:", menu_data)  # 디버깅용
+        if os.environ.get('RENDER'):
+            # Render 환경에서는 로컬 데이터베이스 사용
+            menu_data = load_menu_data()
+        else:
+            # 로컬 환경에서는 Render 서버의 데이터 사용
+            menu_data = get_menu_from_render()
+        print("Sending menu data:", menu_data)
         return jsonify(menu_data)
     except Exception as e:
-        print(f"Error in get_menu: {str(e)}")  # 디버깅용
+        print(f"Error in get_menu: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/menu', methods=['POST'])
 def add_menu():
     try:
-        menu_data = load_menu_data()
-        print(f"현재 메뉴 데이터: {menu_data}")  # 디버깅용 로그 추가
+        if os.environ.get('RENDER'):
+            # Render 환경에서는 로컬 데이터베이스 사용
+            menu_data = load_menu_data()
+        else:
+            # 로컬 환경에서는 Render 서버의 데이터 사용
+            menu_data = get_menu_from_render()
+        
+        print(f"현재 메뉴 데이터: {menu_data}")
         
         # 폼 데이터에서 정보 추출
         category = request.form.get('category')
         name = request.form.get('name')
-        price = request.form.get('price')  # 문자열로 받기
+        price = request.form.get('price')
         image_file = request.files.get('image')
         temperature = request.form.get('temperature', '')
         
-        print(f"추가할 메뉴 정보: category={category}, name={name}, price={price}, temperature={temperature}")  # 디버깅용 로그 추가
+        print(f"추가할 메뉴 정보: category={category}, name={name}, price={price}, temperature={temperature}")
         
         if not all([category, name, price]):
             return jsonify({'error': '카테고리, 이름, 가격은 필수 입력 항목입니다'}), 400
         
         # 이미지 저장 (이미지가 있는 경우에만)
-        image_filename = "logo.png"  # 기본 이미지
+        image_filename = "logo.png"
         if image_file and image_file.filename != '':
             try:
                 image_filename = save_image(image_file)
             except Exception as e:
                 print(f"이미지 저장 실패: {str(e)}")
-                # 이미지 저장 실패 시에도 기본 이미지 사용
         
         # 새 메뉴 ID 생성
         new_id = generate_new_menu_id(menu_data)
@@ -286,12 +326,12 @@ def add_menu():
         menu = {
             "id": new_id,
             "name": name,
-            "price": str(price),  # 문자열로 저장
+            "price": str(price),
             "image": image_filename,
             "temperature": temperature
         }
         
-        print(f"생성된 메뉴 항목: {menu}")  # 디버깅용 로그 추가
+        print(f"생성된 메뉴 항목: {menu}")
         
         # 카테고리가 없으면 새로 생성
         if category not in menu_data:
@@ -300,10 +340,13 @@ def add_menu():
         # 메뉴 추가
         menu_data[category].append(menu)
         
-        print(f"저장할 메뉴 데이터: {menu_data}")  # 디버깅용 로그 추가
+        print(f"저장할 메뉴 데이터: {menu_data}")
         
         # 데이터 저장
-        save_menu_data(menu_data)
+        if os.environ.get('RENDER'):
+            save_menu_data(menu_data)
+        else:
+            save_menu_to_render(menu_data)
         
         return jsonify({'message': '메뉴가 추가되었습니다'}), 201
     
@@ -414,7 +457,10 @@ def serve_image(filename):
             if os.path.exists(default_image):
                 print(f"기본 이미지 사용: logo.png")
                 return send_from_directory(app.config['UPLOAD_FOLDER'], 'logo.png')
-            return jsonify({'error': '이미지를 찾을 수 없습니다.'}), 404
+            else:
+                # 기본 이미지가 없으면 생성
+                create_default_logo()
+                return send_from_directory(app.config['UPLOAD_FOLDER'], 'logo.png')
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
     except Exception as e:
         print(f"이미지 서빙 중 오류 발생: {str(e)}")
