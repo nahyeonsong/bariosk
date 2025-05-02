@@ -21,13 +21,31 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # 데이터베이스 파일 경로 설정
 if os.environ.get('RENDER'):
-    # Render 환경 - 영구 디스크 스토리지 사용
-    RENDER_DISK_PATH = os.environ.get('RENDER_DISK_PATH', '/opt/render/project/src')
-    if not os.path.exists(RENDER_DISK_PATH):
-        os.makedirs(RENDER_DISK_PATH)
-    DATABASE = os.path.join(RENDER_DISK_PATH, 'menu.db')
-    print(f"Render 환경 감지됨. 데이터베이스 경로: {DATABASE}")
-    print(f"Render 디스크 경로 존재 여부: {os.path.exists(RENDER_DISK_PATH)}")
+    try:
+        # Render 환경 - 영구 디스크 스토리지 사용
+        RENDER_DISK_PATH = os.environ.get('RENDER_DISK_PATH', '/opt/render/project/src')
+        print(f"Render 디스크 경로: {RENDER_DISK_PATH}")
+        
+        # 디렉토리 생성 시도
+        try:
+            if not os.path.exists(RENDER_DISK_PATH):
+                os.makedirs(RENDER_DISK_PATH)
+                print(f"Render 디스크 디렉토리 생성 성공: {RENDER_DISK_PATH}")
+        except Exception as e:
+            print(f"Render 디스크 디렉토리 생성 실패: {str(e)}")
+            # 대체 경로 사용
+            RENDER_DISK_PATH = '/tmp'
+            if not os.path.exists(RENDER_DISK_PATH):
+                os.makedirs(RENDER_DISK_PATH)
+            print(f"대체 디스크 경로 사용: {RENDER_DISK_PATH}")
+        
+        DATABASE = os.path.join(RENDER_DISK_PATH, 'menu.db')
+        print(f"Render 환경 감지됨. 데이터베이스 경로: {DATABASE}")
+        print(f"Render 디스크 경로 존재 여부: {os.path.exists(RENDER_DISK_PATH)}")
+        print(f"데이터베이스 파일 경로 존재 여부: {os.path.exists(DATABASE)}")
+    except Exception as e:
+        print(f"Render 환경 설정 중 오류 발생: {str(e)}")
+        raise
 else:
     # 로컬 환경
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
@@ -46,8 +64,12 @@ def get_db():
         # 데이터베이스 디렉토리 확인 및 생성
         db_dir = os.path.dirname(DATABASE)
         if not os.path.exists(db_dir):
-            os.makedirs(db_dir)
-            print(f"데이터베이스 디렉토리 생성: {db_dir}")
+            try:
+                os.makedirs(db_dir)
+                print(f"데이터베이스 디렉토리 생성: {db_dir}")
+            except Exception as e:
+                print(f"데이터베이스 디렉토리 생성 실패: {str(e)}")
+                raise
 
         # 데이터베이스 파일 존재 여부 확인
         if not os.path.exists(DATABASE):
@@ -58,14 +80,23 @@ def get_db():
             file_size = os.path.getsize(DATABASE)
             print(f"데이터베이스 파일 크기: {file_size} bytes")
 
-        db = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
-        print("데이터베이스 연결 성공")
+        # 데이터베이스 연결 시도
+        try:
+            db = sqlite3.connect(DATABASE)
+            db.row_factory = sqlite3.Row
+            print("데이터베이스 연결 성공")
+        except Exception as e:
+            print(f"데이터베이스 연결 실패: {str(e)}")
+            raise
         
         # 현재 데이터베이스의 데이터 수 확인
-        cursor = db.execute('SELECT COUNT(*) FROM menu')
-        count = cursor.fetchone()[0]
-        print(f"현재 데이터베이스의 메뉴 수: {count}")
+        try:
+            cursor = db.execute('SELECT COUNT(*) FROM menu')
+            count = cursor.fetchone()[0]
+            print(f"현재 데이터베이스의 메뉴 수: {count}")
+        except Exception as e:
+            print(f"데이터베이스 쿼리 실패: {str(e)}")
+            # 테이블이 없을 수 있으므로 무시
         
         return db
     except Exception as e:
@@ -609,19 +640,25 @@ def create_default_logo():
 # 서버 실행
 if __name__ == '__main__':
     try:
+        print("서버 시작 준비 중...")
+        
         # 디렉토리 생성
         if not os.path.exists(UPLOAD_FOLDER):
             os.makedirs(UPLOAD_FOLDER)
+            print(f"업로드 디렉토리 생성: {UPLOAD_FOLDER}")
         
         # 기본 로고 이미지 생성
         create_default_logo()
+        print("기본 로고 이미지 생성 완료")
         
         # 데이터베이스 초기화
         init_db()
+        print("데이터베이스 초기화 완료")
         
         # 서버 실행
         port = int(os.environ.get('PORT', 5000))
         print(f"서버 시작: 포트 {port}")
         app.run(debug=True, host='0.0.0.0', port=port)
     except Exception as e:
-        print(f"서버 시작 실패: {str(e)}") 
+        print(f"서버 시작 실패: {str(e)}")
+        raise 
