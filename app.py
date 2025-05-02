@@ -20,9 +20,13 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # 데이터베이스 파일 경로 설정
 if os.environ.get('RENDER'):
-    # Render 환경
-    DATABASE = os.path.join(os.environ.get('RENDER_DISK_PATH', '/opt/render/project/src'), 'menu.db')
+    # Render 환경 - 영구 디스크 스토리지 사용
+    RENDER_DISK_PATH = os.environ.get('RENDER_DISK_PATH', '/opt/render/project/src')
+    if not os.path.exists(RENDER_DISK_PATH):
+        os.makedirs(RENDER_DISK_PATH)
+    DATABASE = os.path.join(RENDER_DISK_PATH, 'menu.db')
     print(f"Render 환경 감지됨. 데이터베이스 경로: {DATABASE}")
+    print(f"Render 디스크 경로 존재 여부: {os.path.exists(RENDER_DISK_PATH)}")
 else:
     # 로컬 환경
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
