@@ -23,7 +23,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if os.environ.get('RENDER'):
     try:
         # Render 환경 - 영구 디스크 스토리지 사용
-        RENDER_DISK_PATH = os.environ.get('RENDER_DISK_PATH', '/opt/render/project/src')
+        RENDER_DISK_PATH = os.environ.get('RENDER_DISK_PATH', '/data')
         print(f"Render 디스크 경로: {RENDER_DISK_PATH}")
         
         # 디렉토리 생성 시도
