@@ -658,7 +658,13 @@ if __name__ == '__main__':
         # 서버 실행
         port = int(os.environ.get('PORT', 5000))
         print(f"서버 시작: 포트 {port}")
-        app.run(debug=True, host='0.0.0.0', port=port)
+        
+        if os.name == 'nt':  # Windows
+            from waitress import serve
+            print("Windows 환경 감지됨. Waitress 서버 사용")
+            serve(app, host='0.0.0.0', port=port)
+        else:  # Linux/Mac
+            app.run(debug=True, host='0.0.0.0', port=port)
     except Exception as e:
         print(f"서버 시작 실패: {str(e)}")
         raise 
