@@ -664,7 +664,11 @@ if __name__ == '__main__':
             print("Windows 환경 감지됨. Waitress 서버 사용")
             serve(app, host='0.0.0.0', port=port)
         else:  # Linux/Mac
-            app.run(debug=True, host='0.0.0.0', port=port)
+            print("Linux/Mac 환경 감지됨. Flask 개발 서버 사용")
+            app.run(debug=False, host='0.0.0.0', port=port)  # debug 모드 비활성화
     except Exception as e:
         print(f"서버 시작 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         raise 
