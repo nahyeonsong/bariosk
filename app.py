@@ -56,6 +56,7 @@ def get_db():
 def init_db():
     try:
         with get_db() as db:
+            # 테이블 생성
             db.execute('''
                 CREATE TABLE IF NOT EXISTS menu (
                     id INTEGER PRIMARY KEY,
@@ -69,6 +70,41 @@ def init_db():
             ''')
             db.commit()
             print("데이터베이스 초기화 성공")
+
+            # 초기 데이터 확인
+            cursor = db.execute('SELECT COUNT(*) FROM menu')
+            count = cursor.fetchone()[0]
+            
+            # 데이터가 없으면 초기 데이터 삽입
+            if count == 0:
+                initial_data = {
+                    "coffee": [
+                        {
+                            "id": 1,
+                            "name": "아메리카노",
+                            "price": "2000",
+                            "image": "logo.png",
+                            "temperature": "H"
+                        },
+                        {
+                            "id": 2,
+                            "name": "카페라떼",
+                            "price": "2500",
+                            "image": "logo.png",
+                            "temperature": "H"
+                        }
+                    ]
+                }
+                
+                # 초기 데이터 저장
+                for category, items in initial_data.items():
+                    for item in items:
+                        db.execute(
+                            'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
+                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''))
+                        )
+                db.commit()
+                print("초기 데이터 삽입 완료")
     except Exception as e:
         print(f"데이터베이스 초기화 실패: {str(e)}")
         raise
@@ -89,7 +125,7 @@ def load_menu_data():
                     'image': row['image'],
                     'temperature': row['temperature']
                 })
-            print(f"메뉴 데이터 로드 성공: {menu_data}")  # 디버깅용
+            print(f"메뉴 데이터 로드 성공: {menu_data}")
             return menu_data
     except Exception as e:
         print(f"메뉴 데이터 로드 실패: {str(e)}")
@@ -488,94 +524,6 @@ def update_menu_order():
         print(f"메뉴 순서 업데이트 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def initialize_menu_data():
-    initial_data = {
-        "coffee": [
-            {
-                "id": 1,
-                "name": "아메리카노",
-                "price": 2000,
-                "image": "e954dc77-2879-4e30-9685-4d8ae14a993d.jpg",
-                "temperature": "H"
-            },
-            {
-                "id": 2,
-                "name": "카페라떼",
-                "price": 2500,
-                "image": "15185792-5ecb-435d-90db-dbd67b630206.jpg",
-                "temperature": "H"
-            }
-        ]
-    }
-    save_menu_data(initial_data)
-
-def backup_json_file():
-    try:
-        json_file = 'menu_data.json'
-        if os.path.exists(json_file):
-            try:
-                # 백업 파일명 생성 (날짜_시간 포함)
-                backup_filename = f'menu_data_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
-                # 백업 디렉토리 생성
-                backup_dir = 'backups'
-                if not os.path.exists(backup_dir):
-                    os.makedirs(backup_dir)
-                # 파일 복사
-                shutil.copy2(json_file, os.path.join(backup_dir, backup_filename))
-                print(f"JSON 파일 백업 완료: {backup_filename}")
-                
-                # 파일이 사용 중인지 확인
-                try:
-                    # 파일을 읽기 모드로 열어서 사용 중인지 확인
-                    with open(json_file, 'r') as f:
-                        pass
-                    # 파일이 사용 중이 아니면 삭제
-                    os.remove(json_file)
-                    print(f"원본 JSON 파일 삭제 완료: {json_file}")
-                except PermissionError:
-                    print(f"JSON 파일이 사용 중이어서 삭제할 수 없습니다: {json_file}")
-                except Exception as e:
-                    print(f"JSON 파일 삭제 중 오류 발생: {str(e)}")
-            except Exception as e:
-                print(f"JSON 파일 백업 중 오류 발생: {str(e)}")
-    except Exception as e:
-        print(f"JSON 파일 백업/삭제 실패: {str(e)}")
-
-def migrate_json_to_db():
-    try:
-        # JSON 파일에서 데이터 로드
-        json_file = 'menu_data.json'
-        if os.path.exists(json_file):
-            with open(json_file, 'r', encoding='utf-8') as f:
-                menu_data = json.load(f)
-                print(f"JSON 데이터 로드 성공: {menu_data}")
-                
-                # 데이터베이스에 저장
-                with get_db() as db:
-                    # 기존 데이터 확인
-                    cursor = db.execute('SELECT COUNT(*) FROM menu')
-                    count = cursor.fetchone()[0]
-                    
-                    if count == 0:  # 데이터베이스가 비어있을 때만 JSON 데이터로 채움
-                        # 새 데이터 저장
-                        for category, items in menu_data.items():
-                            for item in items:
-                                db.execute(
-                                    'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
-                                    (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''))
-                                )
-                        db.commit()
-                        print("JSON 데이터 마이그레이션 성공")
-                        
-                        # 마이그레이션 성공 후 JSON 파일 백업 및 삭제
-                        backup_json_file()
-                    else:
-                        print("데이터베이스에 이미 데이터가 있어 JSON 데이터를 사용하지 않습니다.")
-        else:
-            print("JSON 파일이 존재하지 않습니다.")
-    except Exception as e:
-        print(f"JSON 데이터 마이그레이션 실패: {str(e)}")
-
 def create_default_logo():
     try:
         # 기본 이미지 디렉토리 확인 및 생성
@@ -606,11 +554,11 @@ if __name__ == '__main__':
         if not os.path.exists(UPLOAD_FOLDER):
             os.makedirs(UPLOAD_FOLDER)
         
+        # 기본 로고 이미지 생성
+        create_default_logo()
+        
         # 데이터베이스 초기화
         init_db()
-        
-        # JSON 데이터 마이그레이션 (데이터베이스가 비어있을 때만)
-        migrate_json_to_db()
         
         # 서버 실행
         port = int(os.environ.get('PORT', 5000))
