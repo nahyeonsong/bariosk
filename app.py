@@ -22,14 +22,15 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if os.environ.get('RENDER'):
     # Render 환경
     DATABASE = os.path.join(os.environ.get('RENDER_DISK_PATH', '/opt/render/project/src'), 'menu.db')
+    print(f"Render 환경 감지됨. 데이터베이스 경로: {DATABASE}")
 else:
     # 로컬 환경
     data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
+        print(f"로컬 데이터 디렉토리 생성: {data_dir}")
     DATABASE = os.path.join(data_dir, 'menu.db')
-
-print(f"데이터베이스 경로: {DATABASE}")  # 디버깅용
+    print(f"로컬 환경 감지됨. 데이터베이스 경로: {DATABASE}")
 
 def get_db():
     try:
@@ -44,10 +45,19 @@ def get_db():
             print(f"데이터베이스 파일이 존재하지 않습니다: {DATABASE}")
         else:
             print(f"데이터베이스 파일이 존재합니다: {DATABASE}")
+            # 파일 크기 확인
+            file_size = os.path.getsize(DATABASE)
+            print(f"데이터베이스 파일 크기: {file_size} bytes")
 
         db = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
         print("데이터베이스 연결 성공")
+        
+        # 현재 데이터베이스의 데이터 수 확인
+        cursor = db.execute('SELECT COUNT(*) FROM menu')
+        count = cursor.fetchone()[0]
+        print(f"현재 데이터베이스의 메뉴 수: {count}")
+        
         return db
     except Exception as e:
         print(f"데이터베이스 연결 실패: {str(e)}")
@@ -133,7 +143,7 @@ def load_menu_data():
 
 def save_menu_data(data):
     try:
-        print(f"저장할 메뉴 데이터: {data}")  # 디버깅용
+        print(f"저장할 메뉴 데이터: {data}")
         with get_db() as db:
             # 기존 데이터 삭제
             db.execute('DELETE FROM menu')
@@ -143,7 +153,6 @@ def save_menu_data(data):
             for category, items in data.items():
                 for item in items:
                     try:
-                        # 각 필드의 값 확인
                         print(f"저장할 항목: id={item['id']}, category={category}, name={item['name']}, price={item['price']}, image={item['image']}, temperature={item.get('temperature', '')}")
                         
                         db.execute(
