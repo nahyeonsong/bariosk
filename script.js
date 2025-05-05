@@ -1079,6 +1079,55 @@ async function refreshMenuData() {
         // 메뉴 데이터 업데이트
         menuData = data;
 
+        // 로컬 스토리지에서 카테고리 순서 확인
+        const savedCategories = loadCategoryOrderFromLocalStorage();
+        if (savedCategories && savedCategories.length > 0) {
+            console.log(
+                "로컬 스토리지에서 카테고리 순서 사용:",
+                savedCategories
+            );
+
+            // 서버에서 새로 추가된 카테고리 확인하여 추가
+            const allCategories = [...savedCategories];
+            Object.keys(menuData).forEach((category) => {
+                if (!allCategories.includes(category)) {
+                    allCategories.push(category);
+                    console.log("새 카테고리 발견하여 추가:", category);
+                }
+            });
+
+            // 메뉴 데이터에 없는 카테고리 필터링
+            const finalCategories = allCategories.filter((category) =>
+                Object.keys(menuData).includes(category)
+            );
+
+            // 로컬 스토리지에 업데이트된 카테고리 순서 저장
+            if (finalCategories.length !== savedCategories.length) {
+                saveCategoryOrderToLocalStorage(finalCategories);
+                console.log("업데이트된 카테고리 순서 저장:", finalCategories);
+            }
+
+            // UI 업데이트
+            updateCategorySelects(finalCategories);
+            renderCategoryList(finalCategories);
+            updateMenuDisplay(finalCategories);
+        } else {
+            // 로컬에 저장된 순서가 없으면 현재 메뉴 데이터의 카테고리 키 순서 사용
+            const currentCategories = Object.keys(menuData);
+            console.log(
+                "현재 메뉴 데이터의 카테고리 순서 사용:",
+                currentCategories
+            );
+
+            // 로컬 스토리지에 저장
+            saveCategoryOrderToLocalStorage(currentCategories);
+
+            // UI 업데이트
+            updateCategorySelects(currentCategories);
+            renderCategoryList(currentCategories);
+            updateMenuDisplay(currentCategories);
+        }
+
         // 로컬 스토리지에 메뉴 데이터 캐싱
         try {
             localStorage.setItem("bariosk_menu_data", JSON.stringify(menuData));
@@ -1091,8 +1140,6 @@ async function refreshMenuData() {
             console.warn("메뉴 데이터 캐시 저장 실패:", storageError);
         }
 
-        // 카테고리 로드 후 메뉴 업데이트
-        loadCategoriesAndUpdateDisplay();
         return menuData;
     } catch (error) {
         console.error("최신 메뉴 데이터 로드 실패:", error);
@@ -1895,40 +1942,6 @@ async function handleCategoryDrop(e) {
             // 로컬 스토리지에 카테고리 순서 저장
             saveCategoryOrderToLocalStorage(categories);
 
-            // 서버에 카테고리 순서 정보 저장 시도 (categories/order API)
-            try {
-                console.log("서버에 카테고리 순서 저장 시도:", categories);
-
-                const orderResponse = await fetch(
-                    `${API_BASE_URL}/api/categories/order`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Cache-Control": "no-cache",
-                        },
-                        body: JSON.stringify({ categories }),
-                    }
-                ).catch((err) => {
-                    console.warn("카테고리 순서 API 호출 실패:", err);
-                    return { ok: false, error: err };
-                });
-
-                if (orderResponse && orderResponse.ok) {
-                    console.log("카테고리 순서 API 저장 성공");
-                } else {
-                    console.warn(
-                        "카테고리 순서 API 응답 실패, 메뉴 데이터 통해 저장 진행"
-                    );
-                }
-            } catch (orderError) {
-                // 카테고리 순서 API 실패해도 메뉴 데이터 저장은 계속 진행
-                console.warn(
-                    "카테고리 순서 API 호출 오류 (무시됨):",
-                    orderError
-                );
-            }
-
             // 원본 메뉴 데이터 복사
             const originalMenuData = JSON.parse(JSON.stringify(menuData));
             console.log(
@@ -1936,36 +1949,36 @@ async function handleCategoryDrop(e) {
                 Object.keys(originalMenuData)
             );
 
-            // 재정렬된 메뉴 데이터 생성
+            // 새 순서로 메뉴 데이터 재구성
             const reorderedMenuData = {};
 
-            // 1. 먼저 드래그된 순서대로 카테고리 추가
-            for (const category of categories) {
+            // 1. 카테고리 순서대로 메뉴 항목 재구성
+            categories.forEach((category) => {
                 if (originalMenuData[category]) {
+                    // 기존 배열 구조 유지
                     reorderedMenuData[category] = originalMenuData[category];
                 } else {
-                    // 카테고리가 있지만 메뉴 항목이 없는 경우 빈 배열 추가
+                    // 없는 카테고리면 빈 배열 추가
                     reorderedMenuData[category] = [];
                 }
-            }
+            });
 
-            // 2. 혹시 누락된 카테고리 추가 (드물게 발생할 수 있음)
-            for (const category in originalMenuData) {
+            // 2. 혹시 누락된 카테고리가 있다면 추가 (원본 순서 유지)
+            Object.keys(originalMenuData).forEach((category) => {
                 if (!reorderedMenuData.hasOwnProperty(category)) {
                     reorderedMenuData[category] = originalMenuData[category];
                 }
-            }
+            });
 
             console.log(
-                "변경 전 menuData 카테고리 순서:",
-                Object.keys(originalMenuData)
-            );
-            console.log(
-                "변경 후 재정렬된 카테고리 순서:",
+                "재정렬된 카테고리 순서:",
                 Object.keys(reorderedMenuData)
             );
 
-            // 3. 메뉴 데이터 저장 요청
+            // 3. 서버에 카테고리 순서 변경 정보 추가 - 서버에서는 이 정보를 무시하나 클라이언트에서 필요
+            // 직접 객체에 데이터 넣으면 서버에서 오류가 발생하는 문제 해결
+
+            // 4. 메뉴 데이터 저장 요청
             const response = await fetch(`${API_BASE_URL}/api/menu`, {
                 method: "PUT",
                 headers: {
@@ -1992,30 +2005,55 @@ async function handleCategoryDrop(e) {
                     "카테고리 순서 업데이트 성공 (메뉴 데이터 저장을 통해)"
                 );
 
-                // 4. 메뉴 데이터 직접 업데이트 (서버 응답 대기 없이)
+                // 메뉴 데이터 직접 업데이트
                 menuData = reorderedMenuData;
 
-                // 5. UI 업데이트
+                // 로컬 스토리지에 새로운 순서 저장
+                try {
+                    localStorage.setItem(
+                        "bariosk_categories",
+                        JSON.stringify(categories)
+                    );
+                    localStorage.setItem(
+                        "bariosk_categories_time",
+                        Date.now().toString()
+                    );
+                    console.log(
+                        "카테고리 순서를 로컬 스토리지에 저장:",
+                        categories
+                    );
+
+                    // 메뉴 데이터도 로컬 스토리지에 저장
+                    localStorage.setItem(
+                        "bariosk_menu_data",
+                        JSON.stringify(menuData)
+                    );
+                    localStorage.setItem(
+                        "bariosk_menu_data_time",
+                        Date.now().toString()
+                    );
+                    console.log("메뉴 데이터를 로컬 스토리지에 캐시함");
+                } catch (storageError) {
+                    console.warn("로컬 스토리지 저장 오류:", storageError);
+                }
+
+                // UI 업데이트
                 updateCategorySelects(categories);
                 updateMenuDisplay(categories);
-
-                // 6. 카테고리의 드래그 앤 드롭 기능 재활성화
                 renderCategoryList(categories);
 
-                // 7. 성공 메시지
                 alert("카테고리 순서가 변경되었습니다.");
 
-                // 8. 페이지 리로드없이 서버에서 최신 데이터 가져오기 (백그라운드)
+                // 페이지 리로드없이 서버에서 최신 데이터 가져오기 (백그라운드)
                 setTimeout(async () => {
                     try {
-                        const freshCategories = await loadCategories();
+                        await refreshMenuData();
                         console.log(
-                            "백그라운드에서 최신 카테고리 로드:",
-                            freshCategories
+                            "백그라운드에서 최신 메뉴 데이터 로드 완료"
                         );
                     } catch (e) {
                         console.error(
-                            "백그라운드 카테고리 로드 오류(무시됨):",
+                            "백그라운드 메뉴 데이터 로드 오류(무시됨):",
                             e
                         );
                     }
@@ -2029,12 +2067,14 @@ async function handleCategoryDrop(e) {
                 alert(
                     "카테고리 순서 저장 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요."
                 );
+
                 // 실패 시 기존 순서로 복원
                 loadCategories();
             }
         } catch (error) {
             console.error("카테고리 순서 업데이트 중 오류:", error);
             alert("서버 연결 오류! 카테고리 순서 업데이트에 실패했습니다.");
+
             // 비정상 종료 시 기존 상태로 UI 복원
             loadCategories();
         }
