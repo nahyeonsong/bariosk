@@ -1406,6 +1406,13 @@ def update_category_order():
         categories = data['categories']
         print(f"받은 카테고리 순서: {categories}")
         
+        # 동기화 소스 확인 (무한 루프 방지)
+        sync_source = data.get('sync_source', None)
+        is_sync_request = sync_source is not None
+        
+        if is_sync_request:
+            print(f"동기화 요청 (출처: {sync_source})")
+        
         # 순서가 있는 카테고리 목록을 DB에 저장할 방법이 필요함
         # 새로운 메타데이터 테이블을 생성하거나, 기존 메뉴 항목에 순서 정보를 추가하는 방식으로 구현
         
@@ -1476,50 +1483,46 @@ def update_category_order():
             
             print("카테고리 순서 업데이트 완료")
             
-            # Render 서버와 동기화 (모든 환경에서)
-            try:
-                # 현재 호스트가 렌더 서버가 아닌 경우에만 렌더 서버로 동기화 요청 보냄
-                if not os.environ.get('RENDER') and "bariosk.onrender.com" not in request.host_url:
-                    print("Render 서버에 카테고리 순서 동기화 요청 보내기")
-                    response = requests.put(
-                        f"https://bariosk.onrender.com/api/categories/order",
-                        json={'categories': categories},
-                        headers={
-                            'Content-Type': 'application/json',
-                            'Cache-Control': 'no-cache, no-store, must-revalidate',
-                            'Pragma': 'no-cache',
-                            'Expires': '0'
-                        },
-                        timeout=15  # 타임아웃 15초 설정
-                    )
+            # 다른 서버로 동기화 (동기화 요청이 아닌 경우에만)
+            if not is_sync_request:
+                try:
+                    # 모든 환경에서 명시적으로 동기화 서버 URL 지정
+                    sync_servers = ["https://bariosk.onrender.com", "http://localhost:5000", "https://www.bariosk.com"]
+                    current_host = request.host_url.rstrip('/')
                     
-                    print(f"Render 서버 응답 상태 코드: {response.status_code}")
-                    if response.status_code == 200:
-                        print("Render 서버에서 카테고리 순서 동기화 성공")
-                    else:
-                        print(f"Render 서버에서 카테고리 순서 동기화 실패: {response.text}")
-                        # 실패하면 다시 시도
-                        print("Render 서버 동기화 다시 시도")
-                        time.sleep(2)  # 2초 대기
-                        retry_response = requests.put(
-                            f"https://bariosk.onrender.com/api/categories/order",
-                            json={'categories': categories},
-                            headers={
-                                'Content-Type': 'application/json',
-                                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                                'Pragma': 'no-cache',
-                                'Expires': '0'
-                            },
-                            timeout=15
-                        )
-                        print(f"재시도 응답 상태 코드: {retry_response.status_code}")
-                elif os.environ.get('RENDER'):
-                    print("현재 Render 서버에서 실행 중이므로 동기화 생략")
-                else:
-                    print("동일 서버 내에서 작업 중이므로 동기화 생략")
-            except Exception as e:
-                print(f"Render 서버 동기화 중 오류: {str(e)}")
-                # Render 서버 동기화 실패는 무시하고 계속 진행
+                    print(f"현재 호스트: {current_host}")
+                    print(f"동기화할 서버 목록: {sync_servers}")
+                    
+                    # 현재 호스트가 아닌 다른 모든 서버로 동기화 요청 보내기
+                    for server_url in sync_servers:
+                        if server_url != current_host:
+                            print(f"{server_url}에 카테고리 순서 동기화 요청 보내기")
+                            try:
+                                response = requests.put(
+                                    f"{server_url}/api/categories/order",
+                                    json={'categories': categories, 'sync_source': current_host},
+                                    headers={
+                                        'Content-Type': 'application/json',
+                                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                        'Pragma': 'no-cache',
+                                        'Expires': '0'
+                                    },
+                                    timeout=8  # 타임아웃 줄임
+                                )
+                                
+                                print(f"{server_url} 응답 상태 코드: {response.status_code}")
+                                if response.status_code == 200:
+                                    print(f"{server_url}에 카테고리 순서 동기화 성공")
+                                else:
+                                    print(f"{server_url}에 카테고리 순서 동기화 실패: {response.text}")
+                            except Exception as server_error:
+                                print(f"{server_url} 동기화 중 오류: {str(server_error)}")
+                                # 개별 서버 동기화 실패는 무시하고 계속 진행
+                except Exception as e:
+                    print(f"서버 동기화 중 일반 오류: {str(e)}")
+                    # 동기화 실패는 무시하고 계속 진행
+            else:
+                print(f"동기화 요청으로 추가 동기화는 수행하지 않음")
             
             # CORS 헤더 추가
             response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': categories})
