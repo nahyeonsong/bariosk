@@ -6,6 +6,16 @@ function getApiBaseUrl() {
     const hostname = window.location.hostname;
     console.log("현재 호스트명:", hostname);
 
+    // 모든 환경에서 Render 서버 사용 (로컬/Render 데이터 통합)
+    const FORCE_RENDER_SERVER = true; // true로 설정하면 모든 환경에서 Render 서버 사용
+
+    if (FORCE_RENDER_SERVER) {
+        console.log("모든 환경에서 Render 서버 사용");
+        return "https://bariosk.onrender.com";
+    }
+
+    // 아래는 환경별 분기 처리 (FORCE_RENDER_SERVER가 false일 때만 사용됨)
+
     // Render 호스팅 도메인 또는 커스텀 도메인 - 항상 Render API 서버 사용
     if (hostname === "bariosk.onrender.com") {
         return window.location.origin; // 현재 도메인을 그대로 API 서버로 사용
@@ -23,7 +33,8 @@ function getApiBaseUrl() {
 
     // 로컬 개발 환경
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-        return "http://localhost:5000";
+        // return "http://localhost:5000"; // 로컬 서버 사용 (기존 코드)
+        return "https://bariosk.onrender.com"; // 로컬 환경에서도 Render 서버 사용
     }
 
     // 기타 모든 도메인 - Render 서버를 기본값으로 사용

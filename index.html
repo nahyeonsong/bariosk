@@ -21,6 +21,15 @@
             // API 기본 URL 결정 함수
             function getApiBaseUrl() {
                 const hostname = window.location.hostname;
+                console.log("HTML - 현재 호스트명:", hostname);
+
+                // 모든 환경에서 Render 서버 사용
+                const FORCE_RENDER_SERVER = true;
+
+                if (FORCE_RENDER_SERVER) {
+                    console.log("HTML - 모든 환경에서 Render 서버 사용");
+                    return "https://bariosk.onrender.com";
+                }
 
                 // Render 호스팅 도메인
                 if (hostname === "bariosk.onrender.com") {
@@ -39,7 +48,8 @@
 
                 // 로컬 개발 환경
                 if (hostname === "localhost" || hostname === "127.0.0.1") {
-                    return "http://localhost:5000";
+                    // 로컬 환경에서도 Render 서버 사용
+                    return "https://bariosk.onrender.com";
                 }
 
                 // 기타 모든 도메인
