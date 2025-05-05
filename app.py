@@ -74,6 +74,8 @@ def get_db():
         # 데이터베이스 파일 존재 여부 확인
         if not os.path.exists(DATABASE):
             print(f"데이터베이스 파일이 존재하지 않습니다: {DATABASE}")
+            # 데이터베이스 초기화
+            init_db()
         else:
             print(f"데이터베이스 파일이 존재합니다: {DATABASE}")
             # 파일 크기 확인
@@ -85,20 +87,19 @@ def get_db():
             db = sqlite3.connect(DATABASE)
             db.row_factory = sqlite3.Row
             print("데이터베이스 연결 성공")
+            
+            # 테이블 존재 여부 확인
+            cursor = db.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='menu'")
+            if not cursor.fetchone():
+                print("menu 테이블이 존재하지 않습니다. 초기화를 진행합니다.")
+                init_db()
+            
+            return db
         except Exception as e:
             print(f"데이터베이스 연결 실패: {str(e)}")
             raise
         
-        # 현재 데이터베이스의 데이터 수 확인
-        try:
-            cursor = db.execute('SELECT COUNT(*) FROM menu')
-            count = cursor.fetchone()[0]
-            print(f"현재 데이터베이스의 메뉴 수: {count}")
-        except Exception as e:
-            print(f"데이터베이스 쿼리 실패: {str(e)}")
-            # 테이블이 없을 수 있으므로 무시
-        
-        return db
     except Exception as e:
         print(f"데이터베이스 연결 실패: {str(e)}")
         raise
@@ -115,7 +116,7 @@ def init_db():
                     price TEXT NOT NULL,
                     image TEXT NOT NULL,
                     temperature TEXT,
-                    order_index INTEGER,
+                    order_index INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -393,6 +394,7 @@ def save_menu_to_render(data):
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
     try:
+        print("=== 메뉴 데이터 조회 시작 ===")
         conn = get_db()
         cursor = conn.cursor()
         
@@ -407,6 +409,7 @@ def get_menu():
                 ORDER BY category, order_index
             """)
             rows = cursor.fetchall()
+            print(f"조회된 메뉴 수: {len(rows)}")
             
             # 카테고리별로 메뉴 정리
             menu_by_category = {}
@@ -426,14 +429,17 @@ def get_menu():
             
             # 트랜잭션 커밋
             conn.commit()
+            print("=== 메뉴 데이터 조회 완료 ===")
             return jsonify(menu_by_category)
             
         except Exception as e:
             # 오류 발생 시 롤백
             conn.rollback()
+            print(f"메뉴 데이터 조회 중 오류 발생: {str(e)}")
             raise e
             
     except Exception as e:
+        print(f"메뉴 데이터 조회 실패: {str(e)}")
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conn' in locals():
