@@ -308,21 +308,11 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
 
         const formData = new FormData(addMenuForm);
-        const menuData = {
-            category: formData.get("category"),
-            name: formData.get("name"),
-            price: formData.get("price"),
-            temperature: formData.get("temperature") || "",
-            image: "logo.png", // 기본 이미지 사용
-        };
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/menu`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(menuData),
+                body: formData, // FormData 직접 전송
             });
 
             if (!response.ok) {
@@ -1481,6 +1471,7 @@ function showEditForm(menu, category) {
     const editPrice = document.getElementById("editPrice");
     const editImage = document.getElementById("editImage");
     const deleteMenuBtn = document.getElementById("deleteMenu");
+    const cloneMenuBtn = document.getElementById("cloneMenu");
 
     editMenuId.value = menu.id;
     editCategory.value = category;
@@ -1511,6 +1502,20 @@ function showEditForm(menu, category) {
                 console.error("Error:", error);
                 alert("메뉴 삭제 중 오류가 발생했습니다: " + error.message);
             }
+        }
+    };
+
+    // 복제 버튼에 이벤트 리스너 추가
+    cloneMenuBtn.onclick = async () => {
+        try {
+            // 폼을 먼저 숨김
+            editForm.style.display = "none";
+
+            // 현재 수정 중인 메뉴를 복제
+            await cloneMenuItem(menu, category);
+        } catch (error) {
+            console.error("Error:", error);
+            alert("메뉴 복제 중 오류가 발생했습니다: " + error.message);
         }
     };
 

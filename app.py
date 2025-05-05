@@ -658,7 +658,12 @@ def get_menu():
 @app.route('/api/menu', methods=['POST'])
 def add_menu():
     try:
-        data = request.get_json()
+        # JSON 또는 FormData 데이터 처리 지원
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form.to_dict()
+            
         if not data or 'category' not in data or 'name' not in data or 'price' not in data:
             return jsonify({'error': '필수 정보가 누락되었습니다.'}), 400
         
@@ -678,6 +683,19 @@ def add_menu():
             result = cursor.fetchone()
             next_order = (result['max_order'] + 1) if result['max_order'] is not None else 0
             
+            # 이미지 파일 처리
+            image = 'logo.png'  # 기본 이미지
+            if 'image' in request.files:
+                file = request.files['image']
+                if file and file.filename:
+                    try:
+                        filename = secure_filename(file.filename)
+                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                        image = filename
+                    except Exception as img_error:
+                        print(f"이미지 저장 중 오류 발생: {str(img_error)}")
+                        # 이미지 저장 실패 시 기본 이미지 사용
+            
             # 새 메뉴 추가
             cursor.execute("""
                 INSERT INTO menu (category, name, price, image, temperature, order_index)
@@ -686,14 +704,20 @@ def add_menu():
                 data['category'],
                 data['name'],
                 data['price'],
-                data.get('image', 'logo.png'),
+                image,
                 data.get('temperature', ''),
                 next_order
             ))
             
             # 트랜잭션 커밋
             conn.commit()
-            return jsonify({'message': f'카테고리 "{data["category"]}"가 추가되었습니다.'})
+            
+            # 성공 응답
+            inserted_id = cursor.lastrowid
+            return jsonify({
+                'message': f'메뉴 "{data["name"]}"가 추가되었습니다.',
+                'id': inserted_id
+            })
             
         except Exception as e:
             # 오류 발생 시 롤백
@@ -701,6 +725,10 @@ def add_menu():
             raise e
             
     except Exception as e:
+        print(f"메뉴 추가 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conn' in locals():
