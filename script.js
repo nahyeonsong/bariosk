@@ -119,11 +119,21 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
 
         const formData = new FormData(addMenuForm);
+        const menuData = {
+            category: formData.get("category"),
+            name: formData.get("name"),
+            price: formData.get("price"),
+            temperature: formData.get("temperature") || "",
+            image: "logo.png", // 기본 이미지 사용
+        };
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/menu`, {
                 method: "POST",
-                body: formData,
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(menuData),
             });
 
             if (!response.ok) {
@@ -939,32 +949,37 @@ function clearCart() {
 document.getElementById("clearCartBtn").addEventListener("click", clearCart);
 
 // 메뉴 아이템 복제 함수
-async function cloneMenuItem(menu, category) {
+async function cloneMenuItem(itemId) {
     try {
-        // 새 메뉴 ID 생성
-        const newId =
-            Math.max(
-                ...Object.values(menuData)
-                    .flat()
-                    .map((item) => item.id)
-            ) + 1;
+        const item = menuData[category].find((item) => item.id === itemId);
+        if (!item) {
+            throw new Error("Menu item not found");
+        }
 
-        // 복제할 메뉴 데이터 생성
-        const clonedMenu = {
-            ...menu,
-            id: newId,
-            name: `${menu.name}`,
-            temperature: menu.temperature || "", // 온도가 없으면 기본값 '' 설정
+        // Create a new item with the same data but a new name
+        const newItem = {
+            ...item,
+            name: `${item.name} (Copy)`,
+            id: undefined, // Remove the ID so a new one will be generated
         };
 
-        // 서버에 새 메뉴 추가
+        // Create FormData for the request
         const formData = new FormData();
-        formData.append("category", category);
-        formData.append("name", clonedMenu.name);
-        formData.append("price", clonedMenu.price);
-        formData.append("temperature", clonedMenu.temperature);
-        if (menu.image) {
-            formData.append("image", menu.image);
+        formData.append("category", item.category);
+        formData.append("name", newItem.name);
+        formData.append("price", item.price);
+        formData.append("temperature", item.temperature);
+
+        // If there's an image, fetch it and append it
+        if (item.image) {
+            try {
+                const imageResponse = await fetch(item.image);
+                const imageBlob = await imageResponse.blob();
+                formData.append("image", imageBlob, "image.jpg");
+            } catch (error) {
+                console.error("Error fetching image:", error);
+                // Continue without the image if there's an error
+            }
         }
 
         const response = await fetch(`${API_BASE_URL}/api/menu`, {
@@ -974,21 +989,20 @@ async function cloneMenuItem(menu, category) {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || "메뉴 복제 실패");
+            throw new Error(errorData.error || "Failed to clone menu item");
         }
 
-        // 메뉴 데이터 새로고침
+        const result = await response.json();
+        console.log("Menu item cloned successfully:", result);
+
+        // Refresh the menu display
         await loadMenuData();
-        alert("메뉴가 복제되었습니다.");
+
+        // Show success message
+        alert("Menu item cloned successfully");
     } catch (error) {
-        console.error("Error:", error);
-        if (error.message.includes("Failed to fetch")) {
-            alert(
-                "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
-            );
-        } else {
-            alert("메뉴 복제 중 오류가 발생했습니다: " + error.message);
-        }
+        console.error("Error cloning menu item:", error);
+        alert(error.message || "Failed to clone menu item");
     }
 }
 

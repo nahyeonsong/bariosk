@@ -393,221 +393,197 @@ def save_menu_to_render(data):
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
     try:
-        if os.environ.get('RENDER'):
-            # Render 환경에서는 로컬 데이터베이스 사용
-            menu_data = load_menu_data()
-        else:
-            # 로컬 환경에서는 Render 서버의 데이터를 가져와서 로컬에도 저장
-            menu_data = get_menu_from_render()
-            
-            # 이미지 동기화
-            for category in menu_data.values():
-                for item in category:
-                    if item['image'] != 'logo.png':
-                        sync_image_to_local(item['image'])
+        conn = get_db()
+        cursor = conn.cursor()
         
-        print("Sending menu data:", menu_data)
-        return jsonify(menu_data)
+        # 트랜잭션 시작
+        conn.execute("BEGIN TRANSACTION")
+        
+        try:
+            # 카테고리별로 메뉴 조회
+            cursor.execute("""
+                SELECT id, category, name, price, image, temperature, order_index
+                FROM menu
+                ORDER BY category, order_index
+            """)
+            rows = cursor.fetchall()
+            
+            # 카테고리별로 메뉴 정리
+            menu_by_category = {}
+            for row in rows:
+                category = row['category']
+                if category not in menu_by_category:
+                    menu_by_category[category] = []
+                
+                menu_by_category[category].append({
+                    'id': row['id'],
+                    'name': row['name'],
+                    'price': row['price'],
+                    'image': row['image'],
+                    'temperature': row['temperature'],
+                    'order_index': row['order_index']
+                })
+            
+            # 트랜잭션 커밋
+            conn.commit()
+            return jsonify(menu_by_category)
+            
+        except Exception as e:
+            # 오류 발생 시 롤백
+            conn.rollback()
+            raise e
+            
     except Exception as e:
-        print(f"Error in get_menu: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 @app.route('/api/menu', methods=['POST'])
 def add_menu():
     try:
-        if os.environ.get('RENDER'):
-            # Render 환경에서는 로컬 데이터베이스 사용
-            menu_data = load_menu_data()
-        else:
-            # 로컬 환경에서는 Render 서버의 데이터를 가져와서 로컬에도 저장
-            menu_data = get_menu_from_render()
+        data = request.get_json()
+        if not data or 'category' not in data or 'name' not in data or 'price' not in data:
+            return jsonify({'error': '필수 정보가 누락되었습니다.'}), 400
         
-        print(f"현재 메뉴 데이터: {menu_data}")
+        conn = get_db()
+        cursor = conn.cursor()
         
-        # 폼 데이터에서 정보 추출
-        category = request.form.get('category')
-        name = request.form.get('name')
-        price = request.form.get('price')
-        image_file = request.files.get('image')
-        temperature = request.form.get('temperature', '')
+        # 트랜잭션 시작
+        conn.execute("BEGIN TRANSACTION")
         
-        print(f"추가할 메뉴 정보: category={category}, name={name}, price={price}, temperature={temperature}")
-        
-        # 필수 입력값 검증
-        if not all([category, name, price]):
-            return jsonify({'error': '카테고리, 이름, 가격은 필수 입력 항목입니다'}), 400
-        
-        # 가격 형식 검증
         try:
-            price = str(int(price))  # 숫자로 변환 후 다시 문자열로
-        except ValueError:
-            return jsonify({'error': '가격은 숫자만 입력 가능합니다'}), 400
-        
-        # 이미지 저장 (이미지가 있는 경우에만)
-        image_filename = "logo.png"
-        if image_file and image_file.filename != '':
-            try:
-                if not allowed_file(image_file.filename):
-                    return jsonify({'error': '허용되지 않는 이미지 형식입니다'}), 400
-                
-                image_filename = save_image(image_file)
-                if image_filename == "logo.png":
-                    return jsonify({'error': '이미지 저장에 실패했습니다'}), 500
-                
-                # Render 서버에 이미지 전송
-                if not os.environ.get('RENDER'):
-                    with open(os.path.join(app.config['UPLOAD_FOLDER'], image_filename), 'rb') as img_file:
-                        files = {'image': (image_filename, img_file, 'image/jpeg')}
-                        response = requests.post(f"{RENDER_API_URL}/api/upload-image", files=files)
-                        if response.status_code != 200:
-                            print(f"Render 서버에 이미지 전송 실패: {response.status_code}")
-                            # 이미지 전송 실패 시 로컬 이미지 삭제
-                            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
-                            return jsonify({'error': '이미지 업로드에 실패했습니다'}), 500
-            except Exception as e:
-                print(f"이미지 저장 실패: {str(e)}")
-                return jsonify({'error': '이미지 저장 중 오류가 발생했습니다'}), 500
-        
-        # 새 메뉴 ID 생성
-        new_id = generate_new_menu_id(menu_data)
-        
-        # 새 메뉴 항목 생성
-        menu = {
-            "id": new_id,
-            "name": name,
-            "price": price,
-            "image": image_filename,
-            "temperature": temperature,
-            "order_index": len(menu_data.get(category, []))  # 현재 카테고리의 마지막 순서로 추가
-        }
-        
-        print(f"생성된 메뉴 항목: {menu}")
-        
-        # 카테고리가 없으면 새로 생성
-        if category not in menu_data:
-            menu_data[category] = []
-        
-        # 메뉴 추가
-        menu_data[category].append(menu)
-        
-        print(f"저장할 메뉴 데이터: {menu_data}")
-        
-        # 데이터 저장
-        try:
-            if os.environ.get('RENDER'):
-                # Render 환경에서는 로컬 데이터베이스에만 저장
-                save_menu_data(menu_data)
-            else:
-                # 로컬 환경에서는 Render 서버와 로컬 모두에 저장
-                if not save_menu_to_render(menu_data):
-                    raise Exception("Render 서버에 데이터 저장 실패")
+            # 해당 카테고리의 마지막 order_index 조회
+            cursor.execute("""
+                SELECT MAX(order_index) as max_order
+                FROM menu
+                WHERE category = ?
+            """, (data['category'],))
+            result = cursor.fetchone()
+            next_order = (result['max_order'] + 1) if result['max_order'] is not None else 0
             
-            return jsonify({'message': '메뉴가 추가되었습니다', 'menu': menu}), 201
+            # 새 메뉴 추가
+            cursor.execute("""
+                INSERT INTO menu (category, name, price, image, temperature, order_index)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                data['category'],
+                data['name'],
+                data['price'],
+                data.get('image', 'logo.png'),
+                data.get('temperature', ''),
+                next_order
+            ))
+            
+            # 트랜잭션 커밋
+            conn.commit()
+            return jsonify({'message': f'카테고리 "{data["category"]}"가 추가되었습니다.'})
+            
         except Exception as e:
-            print(f"메뉴 저장 실패: {str(e)}")
-            # 이미지 파일 삭제
-            if image_filename != "logo.png":
-                try:
-                    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
-                except:
-                    pass
-            return jsonify({'error': '메뉴 저장 중 오류가 발생했습니다'}), 500
-    
+            # 오류 발생 시 롤백
+            conn.rollback()
+            raise e
+            
     except Exception as e:
-        print(f"메뉴 추가 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 @app.route('/api/menu/<category>/<int:menu_id>', methods=['PUT'])
-def update_menu(category, menu_id):
+def update_menu(menu_id, category):
     try:
-        menu_data = load_menu_data()
+        data = request.form.to_dict()
+        if not data:
+            return jsonify({'error': '수정할 정보가 없습니다.'}), 400
         
-        if category not in menu_data:
-            return jsonify({'error': '존재하지 않는 카테고리입니다.'}), 404
+        conn = get_db()
+        cursor = conn.cursor()
         
-        menu_index = next((index for (index, d) in enumerate(menu_data[category]) if d['id'] == menu_id), None)
-        if menu_index is None:
-            return jsonify({'error': '존재하지 않는 메뉴입니다.'}), 404
+        # 트랜잭션 시작
+        conn.execute("BEGIN TRANSACTION")
         
-        # 기존 메뉴 정보
-        menu = menu_data[category][menu_index]
-        
-        # 업데이트할 정보
-        name = request.form.get('name', menu['name'])
-        price = request.form.get('price', menu['price'])  # 문자열로 처리
-        new_category = request.form.get('category', category)
-        temperature = request.form.get('temperature', menu.get('temperature', 'H'))
-        
-        # 이미지 업데이트
-        if 'image' in request.files:
-            file = request.files['image']
-            if file.filename != '' and allowed_file(file.filename):
-                # 기존 이미지 삭제
-                old_image_path = os.path.join(app.config['UPLOAD_FOLDER'], menu['image'])
-                if os.path.exists(old_image_path):
-                    os.remove(old_image_path)
-                
-                # 새 이미지 저장
-                image_path = save_image(file)
-                menu['image'] = image_path
-        
-        # 메뉴 정보 업데이트
-        menu['name'] = name
-        menu['price'] = price  # 문자열로 저장
-        menu['temperature'] = temperature
-        
-        # 카테고리가 변경된 경우
-        if new_category != category:
-            # 기존 카테고리에서 메뉴 제거
-            menu_data[category].pop(menu_index)
-            # 새 카테고리에 메뉴 추가
-            if new_category not in menu_data:
-                menu_data[new_category] = []
-            menu_data[new_category].append(menu)
-        else:
-            menu_data[category][menu_index] = menu
-        
-        # 변경사항 저장
-        save_menu_data(menu_data)
-        print(f"메뉴 수정 완료: {menu}")  # 디버깅용 로그 추가
-        
-        return jsonify(menu)
+        try:
+            # 기존 메뉴 정보 조회
+            cursor.execute("SELECT * FROM menu WHERE id = ? AND category = ?", (menu_id, category))
+            menu = cursor.fetchone()
+            if not menu:
+                return jsonify({'error': '메뉴를 찾을 수 없습니다.'}), 404
+            
+            # 이미지 파일 처리
+            image = menu['image']  # 기본값으로 현재 이미지 사용
+            if 'image' in request.files:
+                file = request.files['image']
+                if file and file.filename:
+                    filename = secure_filename(file.filename)
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    image = filename
+            
+            # 메뉴 정보 업데이트
+            update_fields = []
+            params = []
+            for key in ['name', 'price', 'temperature']:
+                if key in data:
+                    update_fields.append(f"{key} = ?")
+                    params.append(data[key])
+            
+            # 이미지 필드 추가
+            update_fields.append("image = ?")
+            params.append(image)
+            
+            if update_fields:
+                params.append(menu_id)
+                params.append(category)
+                cursor.execute(f"""
+                    UPDATE menu
+                    SET {', '.join(update_fields)}
+                    WHERE id = ? AND category = ?
+                """, params)
+            
+            # 트랜잭션 커밋
+            conn.commit()
+            return jsonify({'message': '메뉴가 수정되었습니다.'})
+            
+        except Exception as e:
+            # 오류 발생 시 롤백
+            conn.rollback()
+            raise e
+            
     except Exception as e:
-        print(f"메뉴 수정 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
-@app.route('/api/menu/<category>/<int:menu_id>', methods=['DELETE'])
-def delete_menu(category, menu_id):
+@app.route('/api/menu/<int:menu_id>', methods=['DELETE'])
+def delete_menu(menu_id):
     try:
-        menu_data = load_menu_data()
+        conn = get_db()
+        cursor = conn.cursor()
         
-        if category not in menu_data:
-            return jsonify({'error': '존재하지 않는 카테고리입니다.'}), 404
+        # 트랜잭션 시작
+        conn.execute("BEGIN TRANSACTION")
         
-        # 메뉴 찾기
-        menu_index = next((index for (index, d) in enumerate(menu_data[category]) if d['id'] == menu_id), None)
-        if menu_index is None:
-            return jsonify({'error': '존재하지 않는 메뉴입니다.'}), 404
-        
-        # 이미지 파일 삭제
-        menu = menu_data[category][menu_index]
-        image_path = os.path.join(app.config['UPLOAD_FOLDER'], menu['image'])
-        if os.path.exists(image_path):
-            os.remove(image_path)
-        
-        # 메뉴 삭제
-        menu_data[category].pop(menu_index)
-        
-        # 빈 카테고리 제거
-        if not menu_data[category]:
-            del menu_data[category]
-        
-        save_menu_data(menu_data)
-        return jsonify({'message': '메뉴가 삭제되었습니다.'}), 200
-        
+        try:
+            # 메뉴 삭제
+            cursor.execute("DELETE FROM menu WHERE id = ?", (menu_id,))
+            if cursor.rowcount == 0:
+                return jsonify({'error': '메뉴를 찾을 수 없습니다.'}), 404
+            
+            # 트랜잭션 커밋
+            conn.commit()
+            return jsonify({'message': '메뉴가 삭제되었습니다.'})
+            
+        except Exception as e:
+            # 오류 발생 시 롤백
+            conn.rollback()
+            raise e
+            
     except Exception as e:
-        print(f"메뉴 삭제 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 @app.route('/static/images/<filename>')
 def serve_image(filename):
@@ -745,43 +721,64 @@ def update_menu_order():
         for category, items in new_menu_data.items():
             updated_menu_data[category] = []
             for index, item in enumerate(items):
-                # 기존 메뉴 데이터에서 해당 항목 찾기
-                existing_item = None
-                if category in menu_data:
-                    for existing in menu_data[category]:
-                        if existing['id'] == item['id']:
-                            existing_item = existing
-                            break
-                
-                if existing_item:
-                    # 기존 항목의 데이터를 유지하면서 order_index만 업데이트
-                    item_with_order = existing_item.copy()
-                    item_with_order['order_index'] = index
-                    updated_menu_data[category].append(item_with_order)
-                else:
-                    # 새로운 항목인 경우
-                    item_with_order = item.copy()
-                    item_with_order['order_index'] = index
-                    updated_menu_data[category].append(item_with_order)
+                try:
+                    item_id = int(item['id'])  # ID를 정수로 변환
+                    
+                    # 기존 메뉴 데이터에서 해당 항목 찾기
+                    existing_item = None
+                    if category in menu_data:
+                        for existing in menu_data[category]:
+                            if existing['id'] == item_id:
+                                existing_item = existing
+                                break
+                    
+                    if existing_item:
+                        # 기존 항목의 데이터를 유지하면서 order_index만 업데이트
+                        item_with_order = existing_item.copy()
+                        item_with_order['order_index'] = index
+                        updated_menu_data[category].append(item_with_order)
+                    else:
+                        # 새로운 항목인 경우 필수 필드 확인
+                        required_fields = ['name', 'price', 'image']
+                        if all(field in item for field in required_fields):
+                            item_with_order = {
+                                'id': item_id,
+                                'name': item['name'],
+                                'price': item['price'],
+                                'image': item.get('image', 'logo.png'),
+                                'temperature': item.get('temperature', ''),
+                                'order_index': index
+                            }
+                            updated_menu_data[category].append(item_with_order)
+                        else:
+                            print(f"필수 필드가 누락된 항목 무시: {item}")
+                except (KeyError, ValueError) as e:
+                    print(f"항목 처리 중 오류 발생: {str(e)}, 항목: {item}")
+                    continue
         
         print(f"순서가 추가된 메뉴 데이터: {updated_menu_data}")
         
         # 변경사항 저장
-        if os.environ.get('RENDER'):
-            # Render 환경에서는 로컬 데이터베이스에만 저장
+        try:
             save_menu_data(updated_menu_data)
-            print("Render 환경: 로컬 데이터베이스에 저장 완료")
-        else:
-            # 로컬 환경에서는 Render 서버와 로컬 모두에 저장
-            if save_menu_to_render(updated_menu_data):
-                print("로컬 환경: Render 서버와 로컬 데이터베이스에 저장 완료")
-            else:
-                print("로컬 환경: 저장 실패")
-                return jsonify({'error': '메뉴 순서 저장에 실패했습니다.'}), 500
-        
-        print(f"저장된 메뉴 데이터: {updated_menu_data}")
-        print("=== 메뉴 순서 업데이트 완료 ===")
-        return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'}), 200
+            print("메뉴 데이터 저장 완료")
+            
+            # Render 서버와 동기화 (로컬 환경에서만)
+            if not os.environ.get('RENDER'):
+                try:
+                    if save_menu_to_render(updated_menu_data):
+                        print("Render 서버와 동기화 완료")
+                    else:
+                        print("Render 서버와 동기화 실패")
+                except Exception as e:
+                    print(f"Render 서버 동기화 중 오류: {str(e)}")
+                    # Render 서버 동기화 실패는 무시하고 계속 진행
+            
+            return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'}), 200
+            
+        except Exception as e:
+            print(f"메뉴 데이터 저장 중 오류: {str(e)}")
+            return jsonify({'error': '메뉴 순서 저장에 실패했습니다.'}), 500
         
     except Exception as e:
         print(f"메뉴 순서 업데이트 중 오류 발생: {str(e)}")
@@ -872,13 +869,8 @@ if __name__ == '__main__':
         port = int(os.environ.get('PORT', 5000))
         print(f"서버 시작: 포트 {port}")
         
-        if os.name == 'nt':  # Windows
-            from waitress import serve
-            print("Windows 환경 감지됨. Waitress 서버 사용")
-            serve(app, host='0.0.0.0', port=port)
-        else:  # Linux/Mac
-            print("Linux/Mac 환경 감지됨. Flask 개발 서버 사용")
-            app.run(debug=False, host='0.0.0.0', port=port)  # debug 모드 비활성화
+        # 디버그 모드로 실행
+        app.run(debug=True, host='0.0.0.0', port=port)
     except Exception as e:
         print(f"서버 시작 실패: {str(e)}")
         import traceback
