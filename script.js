@@ -439,11 +439,17 @@ function renderCategoryList(categories) {
     const categoryList = document.getElementById("categoryList");
     if (!categoryList) return;
 
+    // 관리자 모드일 때만 드래그 가능하도록 설정
+    const dragEnabled = isAdminMode;
+
     categoryList.innerHTML = categories
         .map(
-            (category) => `
-        <li>
-            <span class="category-name">${category}</span>
+            (category, index) => `
+        <li class="category-item" data-category="${category}" data-index="${index}" draggable="${dragEnabled}">
+            <div class="category-content">
+                ${dragEnabled ? '<span class="drag-handle">↕</span>' : ""}
+                <span class="category-name">${category}</span>
+            </div>
             <div class="category-actions">
                 <button class="edit-category" data-category="${category}">수정</button>
                 <button class="delete-category" data-category="${category}">삭제</button>
@@ -452,6 +458,18 @@ function renderCategoryList(categories) {
     `
         )
         .join("");
+
+    // 드래그 앤 드롭 이벤트 리스너 추가 (관리자 모드일 때만)
+    if (dragEnabled) {
+        const categoryItems = categoryList.querySelectorAll(".category-item");
+        categoryItems.forEach((item) => {
+            item.addEventListener("dragstart", handleCategoryDragStart);
+            item.addEventListener("dragover", handleCategoryDragOver);
+            item.addEventListener("dragleave", handleCategoryDragLeave);
+            item.addEventListener("drop", handleCategoryDrop);
+            item.addEventListener("dragend", handleCategoryDragEnd);
+        });
+    }
 
     // 카테고리 수정 버튼 이벤트 리스너
     document.querySelectorAll(".edit-category").forEach((button) => {
@@ -767,6 +785,9 @@ function toggleAdminMode() {
 
     // 메뉴 표시 업데이트
     updateMenuDisplay();
+
+    // 카테고리 목록 다시 렌더링 (드래그 활성화/비활성화 적용)
+    loadCategories();
 }
 
 // 메뉴 아이템 생성
@@ -1260,5 +1281,114 @@ async function deleteMenuItem(menuId, category) {
                 alert("메뉴 삭제 중 오류가 발생했습니다: " + error.message);
             }
         }
+    }
+}
+
+// 카테고리 드래그 앤 드롭 관련 변수
+let draggedCategory = null;
+let draggedCategoryStartIndex = null;
+
+// 카테고리 드래그 시작
+function handleCategoryDragStart(e) {
+    draggedCategory = this;
+    draggedCategoryStartIndex = parseInt(this.getAttribute("data-index"));
+    this.classList.add("dragging");
+
+    // 드래그 이미지와 효과 설정
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", this.getAttribute("data-category"));
+
+    // 반투명 효과
+    setTimeout(() => {
+        this.style.opacity = "0.4";
+    }, 0);
+}
+
+// 카테고리 드래그 오버 (드롭 가능한 영역 위에 있을 때)
+function handleCategoryDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    this.classList.add("drag-over");
+}
+
+// 카테고리 드래그 리브 (드롭 가능한 영역을 벗어날 때)
+function handleCategoryDragLeave() {
+    this.classList.remove("drag-over");
+}
+
+// 카테고리 드롭
+async function handleCategoryDrop(e) {
+    e.preventDefault();
+    this.classList.remove("drag-over");
+
+    const dragEndIndex = parseInt(this.getAttribute("data-index"));
+
+    if (draggedCategoryStartIndex !== dragEndIndex) {
+        try {
+            // 카테고리 목록 가져오기
+            const categoryList = document.getElementById("categoryList");
+            const categoryItems = Array.from(
+                categoryList.querySelectorAll(".category-item")
+            );
+
+            // 드래그된 항목 제거하고 새 위치에 삽입
+            const categories = categoryItems.map((item) =>
+                item.getAttribute("data-category")
+            );
+            const movedCategory = categories.splice(
+                draggedCategoryStartIndex,
+                1
+            )[0];
+            categories.splice(dragEndIndex, 0, movedCategory);
+
+            // UI 즉시 업데이트
+            renderCategoryList(categories);
+            updateCategorySelects(categories);
+
+            // 서버에 카테고리 순서 저장
+            await saveCategoryOrder(categories);
+
+            console.log("카테고리 순서 변경 완료");
+        } catch (error) {
+            console.error("카테고리 순서 변경 중 오류:", error);
+            alert("카테고리 순서를 저장하는 중 오류가 발생했습니다.");
+
+            // 오류 발생 시 원래 목록으로 복원
+            await loadCategories();
+        }
+    }
+}
+
+// 카테고리 드래그 종료
+function handleCategoryDragEnd() {
+    this.style.opacity = "1";
+    this.classList.remove("dragging");
+    document.querySelectorAll(".category-item").forEach((item) => {
+        item.classList.remove("drag-over");
+    });
+}
+
+// 카테고리 순서 저장
+async function saveCategoryOrder(categories) {
+    try {
+        // 카테고리 순서 저장 API 호출
+        const response = await apiRequest(
+            `${API_BASE_URL}/api/categories/order`,
+            {
+                method: "PUT",
+                body: JSON.stringify({ categories }),
+            }
+        );
+
+        // 응답 확인
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "카테고리 순서 저장 실패");
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("카테고리 순서 저장 오류:", error);
+        throw error;
     }
 }

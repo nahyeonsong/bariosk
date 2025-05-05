@@ -826,19 +826,25 @@ def get_categories():
         print("=== 카테고리 목록 조회 시작 ===")
         
         try:
-            # 데이터베이스에서 직접 카테고리 조회 (중복 제거)
+            # 데이터베이스에서 직접 카테고리 조회 (순서 고려)
             conn = get_db()
             cursor = conn.cursor()
             
-            # 단순하게 모든 카테고리 조회
+            # 시스템 항목의 order_index를 기준으로 카테고리 정렬
             cursor.execute("""
-                SELECT DISTINCT category 
+                SELECT category, MIN(order_index) as category_order
                 FROM menu 
-                ORDER BY category
+                GROUP BY category
+                ORDER BY 
+                    CASE 
+                        WHEN MIN(order_index) <= -900 THEN MIN(order_index) 
+                        ELSE 999999 
+                    END ASC,
+                    category ASC
             """)
             
             all_categories = [row['category'] for row in cursor.fetchall()]
-            print(f"데이터베이스에서 조회된 모든 카테고리: {all_categories}")
+            print(f"데이터베이스에서 조회된 모든 카테고리 (순서 적용): {all_categories}")
             
             conn.close()
             
@@ -1305,6 +1311,94 @@ def upload_image():
         
     except Exception as e:
         print(f"이미지 업로드 중 오류 발생: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/categories/order', methods=['PUT'])
+def update_category_order():
+    try:
+        print("=== 카테고리 순서 업데이트 시작 ===")
+        data = request.get_json()
+        
+        if not data or 'categories' not in data:
+            return jsonify({'error': '카테고리 목록이 필요합니다.'}), 400
+        
+        categories = data['categories']
+        print(f"받은 카테고리 순서: {categories}")
+        
+        # 순서가 있는 카테고리 목록을 DB에 저장할 방법이 필요함
+        # 새로운 메타데이터 테이블을 생성하거나, 기존 메뉴 항목에 순서 정보를 추가하는 방식으로 구현
+        
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            # 트랜잭션 시작
+            cursor.execute("BEGIN TRANSACTION")
+            
+            # 기존 카테고리 정보 조회
+            cursor.execute("""
+                SELECT DISTINCT category FROM menu
+                ORDER BY category
+            """)
+            
+            existing_categories = [row['category'] for row in cursor.fetchall()]
+            print(f"기존 카테고리 목록: {existing_categories}")
+            
+            # 순서가 변경된 카테고리만 처리
+            if set(categories) != set(existing_categories):
+                print(f"경고: 카테고리 집합이 일치하지 않습니다. 받은 카테고리: {set(categories)}, 기존 카테고리: {set(existing_categories)}")
+            
+            # 모든 카테고리의 시스템 항목 업데이트 (카테고리 순서 정보 저장용)
+            for index, category in enumerate(categories):
+                # 기존 카테고리인지 확인
+                if category in existing_categories:
+                    # 이 카테고리의 시스템 항목 찾기
+                    cursor.execute("""
+                        SELECT id FROM menu 
+                        WHERE category = ? AND name = '시스템 항목'
+                    """, (category,))
+                    
+                    system_item = cursor.fetchone()
+                    if system_item:
+                        # 시스템 항목이 있으면 order_index 업데이트
+                        cursor.execute("""
+                            UPDATE menu 
+                            SET order_index = ? 
+                            WHERE id = ?
+                        """, (-999 - index, system_item['id']))
+                        print(f"카테고리 '{category}' 순서 업데이트: {index}")
+                    else:
+                        # 시스템 항목이 없으면 생성
+                        cursor.execute("""
+                            INSERT INTO menu (category, name, price, image, temperature, order_index)
+                            VALUES (?, '시스템 항목', '0', 'logo.png', '', ?)
+                        """, (category, -999 - index))
+                        print(f"카테고리 '{category}' 시스템 항목 생성 및 순서 설정: {index}")
+            
+            # 변경사항 커밋
+            cursor.execute("COMMIT")
+            conn.close()
+            
+            print("카테고리 순서 업데이트 완료")
+            return jsonify({'message': '카테고리 순서가 업데이트되었습니다.'}), 200
+            
+        except Exception as db_error:
+            if 'conn' in locals() and conn:
+                cursor.execute("ROLLBACK")
+                conn.close()
+            
+            print(f"데이터베이스 작업 중 오류: {str(db_error)}")
+            import traceback
+            print("상세 오류:")
+            print(traceback.format_exc())
+            
+            return jsonify({'error': f'카테고리 순서 업데이트 실패: {str(db_error)}'}), 500
+        
+    except Exception as e:
+        print(f"카테고리 순서 업데이트 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 # 서버 실행

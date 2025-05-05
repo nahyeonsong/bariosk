@@ -322,10 +322,57 @@ button[type="submit"]:hover {
     align-items: center;
     padding: 0.5rem;
     border-bottom: 1px solid #eee;
+    background-color: #fff;
 }
 
 #categoryList li:last-child {
     border-bottom: none;
+}
+
+.category-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem;
+    border-bottom: 1px solid #eee;
+    background-color: #fff;
+    transition: background-color 0.2s ease;
+    cursor: grab;
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.category-item:last-child {
+    border-bottom: none;
+}
+
+.category-item.dragging {
+    opacity: 0.4;
+    border: 2px dashed #4caf50;
+}
+
+.category-item.drag-over {
+    border: 2px dashed #2196f3;
+    background-color: #f0f8ff;
+}
+
+.category-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.drag-handle {
+    color: #999;
+    cursor: grab;
+    font-size: 16px;
+    padding: 0 5px;
+}
+
+.category-name {
+    font-weight: 500;
+    flex: 1;
 }
 
 .category-actions {
@@ -341,12 +388,52 @@ button[type="submit"]:hover {
     transition: background-color 0.3s;
 }
 
-.category-actions button:first-child {
+.edit-category {
     background-color: #4caf50;
     color: white;
 }
 
-.category-actions button:last-child {
+.delete-category {
+    background-color: #f44336;
+    color: white;
+}
+
+.edit-category:hover {
+    background-color: #3d8b40;
+}
+
+.delete-category:hover {
+    background-color: #d32f2f;
+}
+
+.edit-category-input {
+    padding: 0.3rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+    margin-right: 10px;
+}
+
+.edit-buttons {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+.save-category,
+.cancel-edit {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.save-category {
+    background-color: #4caf50;
+    color: white;
+}
+
+.cancel-edit {
     background-color: #f44336;
     color: white;
 }
