@@ -124,9 +124,11 @@ def init_db():
             # 초기 데이터 확인
             cursor = db.execute('SELECT COUNT(*) FROM menu')
             count = cursor.fetchone()[0]
+            print(f"현재 데이터베이스의 메뉴 수: {count}")
             
-            # 데이터가 없으면 초기 데이터 삽입
+            # 데이터가 없을 때만 초기 데이터 삽입
             if count == 0:
+                print("데이터베이스가 비어있어 초기 데이터를 삽입합니다.")
                 initial_data = {
                     "coffee": [
                         {
@@ -155,6 +157,8 @@ def init_db():
                         )
                 db.commit()
                 print("초기 데이터 삽입 완료")
+            else:
+                print("기존 데이터가 있어 초기화를 건너뜁니다.")
     except Exception as e:
         print(f"데이터베이스 초기화 실패: {str(e)}")
         raise
