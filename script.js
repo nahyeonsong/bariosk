@@ -1446,8 +1446,9 @@ async function handleDrop() {
             }
 
             console.log("메뉴 순서 업데이트 성공");
-            // UI 업데이트
-            updateMenuDisplay();
+
+            // 서버에서 메뉴 데이터 다시 로드
+            await loadMenuData();
         } catch (error) {
             console.error("메뉴 순서 저장 오류:", error);
             alert("메뉴 순서 저장 중 오류가 발생했습니다: " + error.message);
