@@ -271,6 +271,18 @@ def save_image(file):
         # 저장된 파일이 실제로 존재하는지 확인
         if not os.path.exists(filepath):
             raise ValueError("이미지 파일이 저장되지 않았습니다.")
+        
+        # Render 서버에 이미지 전송
+        if not os.environ.get('RENDER'):
+            try:
+                # 이미지 파일을 다시 열어서 전송
+                with open(filepath, 'rb') as img_file:
+                    files = {'image': (unique_filename, img_file, 'image/jpeg')}
+                    response = requests.post(f"{RENDER_API_URL}/api/upload-image", files=files)
+                    if response.status_code != 200:
+                        print(f"Render 서버에 이미지 전송 실패: {response.status_code}")
+            except Exception as e:
+                print(f"Render 서버에 이미지 전송 중 오류 발생: {str(e)}")
             
         return unique_filename
         
@@ -640,6 +652,26 @@ def create_default_logo():
         print(f"기본 로고 이미지 생성 완료: {logo_path}")
     except Exception as e:
         print(f"기본 로고 이미지 생성 실패: {str(e)}")
+
+@app.route('/api/upload-image', methods=['POST'])
+def upload_image():
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': '이미지 파일이 없습니다.'}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'error': '선택된 파일이 없습니다.'}), 400
+        
+        if file and allowed_file(file.filename):
+            filename = save_image(file)
+            return jsonify({'filename': filename}), 200
+        
+        return jsonify({'error': '허용되지 않는 파일 형식입니다.'}), 400
+        
+    except Exception as e:
+        print(f"이미지 업로드 중 오류 발생: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 # 서버 실행
 if __name__ == '__main__':
