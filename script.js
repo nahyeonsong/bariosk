@@ -1108,8 +1108,18 @@ function updateMenuDisplay(sortedCategories = null) {
 
     try {
         // 카테고리 목록 선택 (소팅된 목록 또는 기본 메뉴데이터 키)
-        const categories = sortedCategories || Object.keys(menuData);
+        const allCategories = sortedCategories || Object.keys(menuData);
+
+        // 누락된 카테고리가 없도록 확인
+        const categories = [...allCategories];
+        Object.keys(menuData).forEach((category) => {
+            if (!categories.includes(category)) {
+                categories.push(category);
+            }
+        });
+
         console.log("표시할 카테고리 목록:", categories);
+        console.log("menuData에 있는 카테고리:", Object.keys(menuData));
 
         // 각 카테고리별로 메뉴 섹션 생성
         let anyMenuDisplayed = false; // 메뉴 표시 여부 확인용
@@ -1840,24 +1850,36 @@ async function handleCategoryDrop(e) {
             // 로컬 스토리지에 카테고리 순서 저장
             saveCategoryOrderToLocalStorage(categories);
 
-            // 메뉴 데이터를 새 순서대로 재정렬
-            const sortedMenuData = {};
+            // 재정렬된 메뉴 데이터 생성
+            const reorderedMenuData = {};
+
+            // 먼저 드래그된 순서대로 카테고리 추가
             categories.forEach((category) => {
                 if (menuData[category]) {
-                    sortedMenuData[category] = menuData[category];
+                    reorderedMenuData[category] = menuData[category];
+                } else {
+                    // 카테고리가 있지만 메뉴 항목이 없는 경우
+                    reorderedMenuData[category] = [];
                 }
             });
 
-            // 혹시 빠진 카테고리가 있다면 추가
-            Object.keys(menuData).forEach((category) => {
-                if (!sortedMenuData[category]) {
-                    sortedMenuData[category] = menuData[category];
+            // 혹시 누락된 카테고리 추가
+            for (const category in menuData) {
+                if (!reorderedMenuData.hasOwnProperty(category)) {
+                    reorderedMenuData[category] = menuData[category];
                 }
-            });
+            }
 
-            console.log("재정렬된 메뉴 데이터:", Object.keys(sortedMenuData));
+            console.log(
+                "변경 전 menuData 카테고리 순서:",
+                Object.keys(menuData)
+            );
+            console.log(
+                "변경 후 재정렬된 카테고리 순서:",
+                Object.keys(reorderedMenuData)
+            );
 
-            // 메뉴 데이터 저장 API를 통해 순서 저장
+            // 메뉴 데이터 저장 요청
             const response = await fetch(`${API_BASE_URL}/api/menu`, {
                 method: "PUT",
                 headers: {
@@ -1865,33 +1887,42 @@ async function handleCategoryDrop(e) {
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     Pragma: "no-cache",
                 },
-                body: JSON.stringify(sortedMenuData),
+                body: JSON.stringify(reorderedMenuData),
             });
+
+            const responseData = await response.text();
+            console.log("메뉴 데이터 저장 응답:", responseData);
 
             if (response.ok) {
                 console.log(
                     "카테고리 순서 업데이트 성공 (메뉴 데이터 저장을 통해)"
                 );
 
-                // 서버에서 새로운 데이터 로드
-                await loadCategories();
-                await loadMenuData();
-                console.log(
-                    "카테고리와 메뉴 데이터를 서버에서 다시 로드했습니다."
-                );
+                // 메뉴 데이터 수정
+                menuData = reorderedMenuData;
+
+                // UI 업데이트
+                updateCategorySelects(categories);
+                updateMenuDisplay(categories);
+
+                alert("카테고리 순서가 변경되었습니다.");
             } else {
-                console.error("카테고리 순서 업데이트 실패:", response.status);
+                console.error(
+                    "카테고리 순서 업데이트 실패:",
+                    response.status,
+                    responseData
+                );
                 alert(
                     "카테고리 순서 저장 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요."
                 );
                 // 실패 시 기존 순서로 복원
-                await loadCategories();
+                loadCategories();
             }
         } catch (error) {
             console.error("카테고리 순서 업데이트 중 오류:", error);
             alert("서버 연결 오류! 카테고리 순서 업데이트에 실패했습니다.");
             // 비정상 종료 시 기존 상태로 UI 복원
-            await loadCategories();
+            loadCategories();
         }
     }
 }
