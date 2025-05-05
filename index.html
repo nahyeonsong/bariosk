@@ -5,7 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta property="og:title" content="바리오스크" />
         <meta property="og:description" content="바리오스크 카페 메뉴" />
-        <meta property="og:image" content="/static/images/logo.png" />
+        <meta
+            property="og:image"
+            content="https://bariosk.onrender.com/static/images/logo.png"
+        />
         <meta property="og:image:width" content="800" />
         <meta property="og:image:height" content="400" />
         <meta property="og:url" content="" />
@@ -15,8 +18,39 @@
         <link rel="stylesheet" href="styles.css" />
         <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
         <script>
-            // 현재 URL을 OG 태그에 설정
+            // API 기본 URL 결정 함수
+            function getApiBaseUrl() {
+                const hostname = window.location.hostname;
+
+                // Render 호스팅 도메인
+                if (hostname === "bariosk.onrender.com") {
+                    return window.location.origin;
+                }
+
+                // 다른 도메인(커스텀 도메인 포함)
+                if (
+                    hostname === "www.bariosk.com" ||
+                    hostname === "bariosk.com" ||
+                    hostname.includes(".bariosk.com") ||
+                    hostname === "nahyeonsong.github.io"
+                ) {
+                    return "https://bariosk.onrender.com";
+                }
+
+                // 로컬 개발 환경
+                if (hostname === "localhost" || hostname === "127.0.0.1") {
+                    return "http://localhost:5000";
+                }
+
+                // 기타 모든 도메인
+                return "https://bariosk.onrender.com";
+            }
+
+            // 현재 URL을 OG 태그에 설정하고 이미지 경로 수정
             document.addEventListener("DOMContentLoaded", function () {
+                const apiBaseUrl = getApiBaseUrl();
+                console.log("HTML에서 결정된 API URL:", apiBaseUrl);
+
                 // og:url 메타 태그 업데이트
                 const ogUrlMeta = document.querySelector(
                     'meta[property="og:url"]'
@@ -25,16 +59,21 @@
                     ogUrlMeta.setAttribute("content", window.location.href);
                 }
 
-                // og:image 메타 태그 업데이트 - 절대 URL 사용
+                // og:image 메타 태그 업데이트 - 항상 Render 서버의 이미지 사용
                 const ogImageMeta = document.querySelector(
                     'meta[property="og:image"]'
                 );
                 if (ogImageMeta) {
-                    const baseUrl = window.location.origin;
                     ogImageMeta.setAttribute(
                         "content",
-                        baseUrl + "/static/images/logo.png"
+                        "https://bariosk.onrender.com/static/images/logo.png"
                     );
+                }
+
+                // 로고 이미지 소스 업데이트
+                const logo = document.getElementById("logo");
+                if (logo) {
+                    logo.src = apiBaseUrl + "/static/images/logo.png";
                 }
             });
         </script>
@@ -44,7 +83,7 @@
             <div class="header-content">
                 <div class="logo-container">
                     <img
-                        src="static/images/logo.png"
+                        src="https://bariosk.onrender.com/static/images/logo.png"
                         alt="Bariosk Logo"
                         class="logo"
                         id="logo"

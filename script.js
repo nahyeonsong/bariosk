@@ -6,17 +6,18 @@ function getApiBaseUrl() {
     const hostname = window.location.hostname;
     console.log("현재 호스트명:", hostname);
 
-    // Render 호스팅 도메인
-    if (
-        hostname === "bariosk.onrender.com" ||
-        hostname === "www.bariosk.com" ||
-        hostname === "bariosk.com"
-    ) {
-        return "https://bariosk.onrender.com";
+    // Render 호스팅 도메인 또는 커스텀 도메인 - 항상 Render API 서버 사용
+    if (hostname === "bariosk.onrender.com") {
+        return window.location.origin; // 현재 도메인을 그대로 API 서버로 사용
     }
 
-    // GitHub Pages
-    if (hostname === "nahyeonsong.github.io") {
+    // 다른 도메인(커스텀 도메인 포함) - Render API 서버 사용
+    if (
+        hostname === "www.bariosk.com" ||
+        hostname === "bariosk.com" ||
+        hostname.includes(".bariosk.com") ||
+        hostname === "nahyeonsong.github.io"
+    ) {
         return "https://bariosk.onrender.com";
     }
 
@@ -25,8 +26,8 @@ function getApiBaseUrl() {
         return "http://localhost:5000";
     }
 
-    // 기타 모든 도메인 (커스텀 도메인 포함) - 현재 도메인을 그대로 사용
-    return window.location.origin;
+    // 기타 모든 도메인 - Render 서버를 기본값으로 사용
+    return "https://bariosk.onrender.com";
 }
 
 console.log("사용할 API URL:", API_BASE_URL);
@@ -43,12 +44,14 @@ let dragStartIndex = null;
 // 요청 타임아웃 설정
 const REQUEST_TIMEOUT = 15000; // 15초
 
-// API 요청 함수 (타임아웃 처리 추가)
-async function apiRequest(url, options = {}) {
+// API 요청 함수 (타임아웃 처리 및 재시도 로직 추가)
+async function apiRequest(url, options = {}, retries = 2) {
     try {
         // AbortController를 사용하여 타임아웃 설정
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+        console.log(`API 요청: ${url} (남은 재시도: ${retries})`);
 
         const response = await fetch(url, {
             ...options,
@@ -76,10 +79,33 @@ async function apiRequest(url, options = {}) {
         return response;
     } catch (error) {
         if (error.name === "AbortError") {
+            console.error("요청 시간 초과:", url);
+            if (retries > 0) {
+                console.log(
+                    `${url} 재시도 중... (남은 재시도: ${retries - 1})`
+                );
+                return apiRequest(url, options, retries - 1);
+            }
             throw new Error(
                 "요청 시간이 초과되었습니다. 서버 응답이 지연되고 있습니다."
             );
         }
+
+        if (
+            retries > 0 &&
+            (error.message.includes("Failed to fetch") ||
+                error.message.includes("NetworkError"))
+        ) {
+            console.log(
+                `네트워크 오류로 ${url} 재시도 중... (남은 재시도: ${
+                    retries - 1
+                })`
+            );
+            // 지수 백오프: 재시도 전 약간의 지연 추가
+            await new Promise((r) => setTimeout(r, 1000 * (3 - retries)));
+            return apiRequest(url, options, retries - 1);
+        }
+
         throw error;
     }
 }
@@ -280,13 +306,47 @@ document.addEventListener("DOMContentLoaded", () => {
 async function loadCategories() {
     try {
         console.log("카테고리 목록 로딩 시작");
-        const response = await apiRequest(`${API_BASE_URL}/api/categories`);
-        const categories = await response.json();
 
-        console.log("로드된 카테고리:", categories);
-        updateCategorySelects(categories);
-        renderCategoryList(categories);
-        return categories;
+        // 먼저 Render 서버에서 시도
+        try {
+            const renderUrl = "https://bariosk.onrender.com/api/categories";
+            console.log(
+                `Render 서버에서 카테고리 목록 로드 시도: ${renderUrl}`
+            );
+
+            const response = await apiRequest(renderUrl);
+            const categories = await response.json();
+            console.log("Render 서버에서 카테고리 목록 로드 성공:", categories);
+            updateCategorySelects(categories);
+            renderCategoryList(categories);
+            return categories;
+        } catch (renderError) {
+            console.warn(
+                "Render 서버에서 카테고리 목록 로드 실패:",
+                renderError
+            );
+
+            // 실패한 경우 설정된 API URL에서 시도
+            if (API_BASE_URL !== "https://bariosk.onrender.com") {
+                console.log(
+                    `설정된 API URL에서 카테고리 목록 로드 시도: ${API_BASE_URL}/api/categories`
+                );
+                const response = await apiRequest(
+                    `${API_BASE_URL}/api/categories`
+                );
+                const categories = await response.json();
+                console.log(
+                    "설정된 API URL에서 카테고리 목록 로드 성공:",
+                    categories
+                );
+                updateCategorySelects(categories);
+                renderCategoryList(categories);
+                return categories;
+            }
+
+            // 모두 실패한 경우 원래 오류 다시 던지기
+            throw renderError;
+        }
     } catch (error) {
         console.error("카테고리 목록 로드 중 오류:", error);
         if (
@@ -471,11 +531,41 @@ function getTemperatureText(temperature) {
 async function loadMenuData() {
     try {
         console.log("메뉴 데이터 로딩 시작");
-        const response = await apiRequest(`${API_BASE_URL}/api/menu`);
-        menuData = await response.json();
-        console.log("로드된 메뉴 데이터:", menuData); // 디버깅용
-        updateMenuDisplay();
-        return menuData;
+
+        // 먼저 Render 서버에서 시도
+        try {
+            const renderUrl = "https://bariosk.onrender.com/api/menu";
+            console.log(`Render 서버에서 메뉴 데이터 로드 시도: ${renderUrl}`);
+
+            const response = await apiRequest(renderUrl);
+            menuData = await response.json();
+            console.log(
+                "Render 서버에서 메뉴 데이터 로드 성공:",
+                Object.keys(menuData)
+            );
+            updateMenuDisplay();
+            return menuData;
+        } catch (renderError) {
+            console.warn("Render 서버에서 메뉴 데이터 로드 실패:", renderError);
+
+            // 실패한 경우 설정된 API URL에서 시도
+            if (API_BASE_URL !== "https://bariosk.onrender.com") {
+                console.log(
+                    `설정된 API URL에서 메뉴 데이터 로드 시도: ${API_BASE_URL}/api/menu`
+                );
+                const response = await apiRequest(`${API_BASE_URL}/api/menu`);
+                menuData = await response.json();
+                console.log(
+                    "설정된 API URL에서 메뉴 데이터 로드 성공:",
+                    Object.keys(menuData)
+                );
+                updateMenuDisplay();
+                return menuData;
+            }
+
+            // 모두 실패한 경우 원래 오류 다시 던지기
+            throw renderError;
+        }
     } catch (error) {
         console.error("메뉴 데이터 로드 중 오류:", error);
         alert("메뉴 데이터를 불러오는데 실패했습니다: " + error.message);
