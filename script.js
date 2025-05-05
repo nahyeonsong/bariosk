@@ -628,7 +628,8 @@ async function loadMenuData() {
             }
         }
 
-        updateMenuDisplay();
+        // 카테고리 로드 후 메뉴 업데이트
+        loadCategoriesAndUpdateDisplay();
         return menuData;
     } catch (error) {
         console.error("메뉴 데이터 로드 중 오류:", error);
@@ -636,7 +637,7 @@ async function loadMenuData() {
         // 이미 메뉴 데이터가 있으면 그대로 사용
         if (Object.keys(menuData).length > 0) {
             console.log("오류 발생으로 기존 메뉴 데이터 유지");
-            updateMenuDisplay();
+            loadCategoriesAndUpdateDisplay();
             return menuData;
         }
 
@@ -647,7 +648,7 @@ async function loadMenuData() {
             for (const category of categories) {
                 menuData[category] = [];
             }
-            updateMenuDisplay();
+            loadCategoriesAndUpdateDisplay();
         } catch (catError) {
             console.error("카테고리 및 메뉴 데이터 모두 로드 실패");
             alert("메뉴 데이터를 불러오는데 실패했습니다: " + error.message);
@@ -657,8 +658,24 @@ async function loadMenuData() {
     }
 }
 
+// 카테고리 로드 후 메뉴 업데이트 함수
+async function loadCategoriesAndUpdateDisplay() {
+    try {
+        // 정렬된 카테고리 목록 가져오기
+        const sortedCategories = await loadCategories();
+        console.log("정렬된 카테고리 순서로 메뉴 업데이트:", sortedCategories);
+
+        // 정렬된 카테고리 순서로 메뉴 표시 업데이트
+        updateMenuDisplay(sortedCategories);
+    } catch (error) {
+        console.error("카테고리 로드 후 메뉴 업데이트 실패:", error);
+        // 오류 발생 시 기본 메뉴 표시
+        updateMenuDisplay();
+    }
+}
+
 // 메뉴 표시 업데이트
-function updateMenuDisplay() {
+function updateMenuDisplay(sortedCategories = null) {
     const menuContainer = document.getElementById("menuContainer");
     if (!menuContainer) {
         console.error("menuContainer element not found");
@@ -668,78 +685,93 @@ function updateMenuDisplay() {
     // 메뉴 컨테이너 초기화
     menuContainer.innerHTML = "";
 
-    // 각 카테고리별로 메뉴 섹션 생성
-    for (const category in menuData) {
-        const categorySection = document.createElement("div");
-        categorySection.className = "menu-section";
-        categorySection.id = `category-${category}`;
+    try {
+        // 카테고리 목록 선택 (소팅된 목록 또는 기본 메뉴데이터 키)
+        const categories = sortedCategories || Object.keys(menuData);
 
-        // 카테고리 제목
-        const categoryTitle = document.createElement("h2");
-        categoryTitle.textContent = category;
-        categorySection.appendChild(categoryTitle);
+        // 각 카테고리별로 메뉴 섹션 생성
+        for (const category of categories) {
+            // 해당 카테고리가 menuData에 있는지 확인
+            if (!menuData[category]) continue;
 
-        // 메뉴 그리드 생성
-        const menuGrid = document.createElement("div");
-        menuGrid.className = "menu-grid";
+            const categorySection = document.createElement("div");
+            categorySection.className = "menu-section";
+            categorySection.id = `category-${category}`;
 
-        // 각 메뉴 아이템 추가
-        menuData[category].forEach((menu) => {
-            const menuItem = document.createElement("div");
-            menuItem.className = "menu-item";
-            menuItem.draggable = isAdminMode;
-            menuItem.dataset.id = menu.id;
-            menuItem.dataset.category = category;
+            // 카테고리 제목
+            const categoryTitle = document.createElement("h2");
+            categoryTitle.textContent = category;
+            categorySection.appendChild(categoryTitle);
 
-            const adminControls = isAdminMode
-                ? `
-                <div class="admin-controls">
-                    <button class="edit-btn" data-id="${
-                        menu.id
-                    }" data-category="${category}">수정</button>
-                    <button class="clone-btn" onclick="cloneMenuItem(${JSON.stringify(
-                        menu
-                    ).replace(/"/g, "&quot;")}, '${category}')">복제</button>
-                    <button class="delete-btn" onclick="deleteMenuItem(${
-                        menu.id
-                    }, '${category}')">삭제</button>
-                </div>
-                `
-                : "";
+            // 메뉴 그리드 생성
+            const menuGrid = document.createElement("div");
+            menuGrid.className = "menu-grid";
 
-            const addToCartButton = !isAdminMode
-                ? `<button class="add-to-cart" onclick="addToCart(${menu.id})">담기</button>`
-                : "";
+            // 각 메뉴 아이템 추가
+            menuData[category].forEach((menu) => {
+                const menuItem = document.createElement("div");
+                menuItem.className = "menu-item";
+                menuItem.draggable = isAdminMode;
+                menuItem.dataset.id = menu.id;
+                menuItem.dataset.category = category;
 
-            menuItem.innerHTML = `
-                <img src="${API_BASE_URL}/static/images/${menu.image}" alt="${
-                menu.name
-            }" onerror="this.src='${API_BASE_URL}/static/images/logo.png'">
-                <div class="menu-info">
-                    <h3>${menu.name}</h3>
-                    <p class="price">${menu.price.toLocaleString()}원</p>
-                    <p class="temperature">${getTemperatureText(
-                        menu.temperature
-                    )}</p>
-                </div>
-                ${adminControls}
-                ${addToCartButton}
-            `;
+                const adminControls = isAdminMode
+                    ? `
+                    <div class="admin-controls">
+                        <button class="edit-btn" data-id="${
+                            menu.id
+                        }" data-category="${category}">수정</button>
+                        <button class="clone-btn" onclick="cloneMenuItem(${JSON.stringify(
+                            menu
+                        ).replace(
+                            /"/g,
+                            "&quot;"
+                        )}, '${category}')">복제</button>
+                        <button class="delete-btn" onclick="deleteMenuItem(${
+                            menu.id
+                        }, '${category}')">삭제</button>
+                    </div>
+                    `
+                    : "";
 
-            if (isAdminMode) {
-                menuItem.addEventListener("dragstart", handleDragStart);
-                menuItem.addEventListener("dragover", handleDragOver);
-                menuItem.addEventListener("dragenter", handleDragEnter);
-                menuItem.addEventListener("dragleave", handleDragLeave);
-                menuItem.addEventListener("drop", handleDrop);
-                menuItem.addEventListener("dragend", handleDragEnd);
-            }
+                const addToCartButton = !isAdminMode
+                    ? `<button class="add-to-cart" onclick="addToCart(${menu.id})">담기</button>`
+                    : "";
 
-            menuGrid.appendChild(menuItem);
-        });
+                menuItem.innerHTML = `
+                    <img src="${API_BASE_URL}/static/images/${
+                    menu.image
+                }" alt="${
+                    menu.name
+                }" onerror="this.src='${API_BASE_URL}/static/images/logo.png'">
+                    <div class="menu-info">
+                        <h3>${menu.name}</h3>
+                        <p class="price">${menu.price.toLocaleString()}원</p>
+                        <p class="temperature">${getTemperatureText(
+                            menu.temperature
+                        )}</p>
+                    </div>
+                    ${adminControls}
+                    ${addToCartButton}
+                `;
 
-        categorySection.appendChild(menuGrid);
-        menuContainer.appendChild(categorySection);
+                if (isAdminMode) {
+                    menuItem.addEventListener("dragstart", handleDragStart);
+                    menuItem.addEventListener("dragover", handleDragOver);
+                    menuItem.addEventListener("dragenter", handleDragEnter);
+                    menuItem.addEventListener("dragleave", handleDragLeave);
+                    menuItem.addEventListener("drop", handleDrop);
+                    menuItem.addEventListener("dragend", handleDragEnd);
+                }
+
+                menuGrid.appendChild(menuItem);
+            });
+
+            categorySection.appendChild(menuGrid);
+            menuContainer.appendChild(categorySection);
+        }
+    } catch (error) {
+        console.error("메뉴 표시 업데이트 중 오류:", error);
     }
 
     // 이벤트 리스너 추가
@@ -783,11 +815,8 @@ function toggleAdminMode() {
         logo.style.padding = isAdminMode ? "2px" : "0";
     }
 
-    // 메뉴 표시 업데이트
-    updateMenuDisplay();
-
-    // 카테고리 목록 다시 렌더링 (드래그 활성화/비활성화 적용)
-    loadCategories();
+    // 카테고리 목록 다시 로드하고 메뉴 표시 업데이트 (순서 적용)
+    loadCategoriesAndUpdateDisplay();
 }
 
 // 메뉴 아이템 생성
@@ -1347,6 +1376,9 @@ async function handleCategoryDrop(e) {
 
             // 서버에 카테고리 순서 저장
             await saveCategoryOrder(categories);
+
+            // 메뉴 표시 업데이트 (변경된 카테고리 순서 적용)
+            await loadCategoriesAndUpdateDisplay();
 
             console.log("카테고리 순서 변경 완료");
         } catch (error) {
