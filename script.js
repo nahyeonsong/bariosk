@@ -186,19 +186,15 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             console.log(`카테고리 추가 시도: ${categoryName}`);
 
-            // 직접 Render 서버로 요청 전송
-            const url = "https://bariosk.onrender.com/api/categories";
+            // 요청을 API_BASE_URL로 통일
+            const url = `${API_BASE_URL}/api/categories`;
             console.log(`카테고리 추가 요청 URL: ${url}`);
 
             const requestData = JSON.stringify({ name: categoryName });
             console.log(`요청 데이터: ${requestData}`);
 
-            const response = await fetch(url, {
+            const response = await apiRequest(url, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                },
                 body: requestData,
             });
 
@@ -222,33 +218,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
             addCategoryForm.reset();
 
-            // 로컬 menuData에 카테고리 추가 (페이지 새로고침 없이 작동하도록)
+            // 클라이언트 측 최적화 - 새 카테고리를 즉시 적용
             if (!menuData[categoryName]) {
                 menuData[categoryName] = [];
                 console.log(`로컬 menuData에 카테고리 추가: ${categoryName}`);
 
                 // 카테고리 선택 옵션 업데이트
-                updateCategorySelects(Object.keys(menuData));
-
-                // 카테고리 목록 렌더링
-                renderCategoryList(Object.keys(menuData));
-
-                // 메뉴 표시 업데이트
+                const categories = Object.keys(menuData);
+                updateCategorySelects(categories);
+                renderCategoryList(categories);
                 updateMenuDisplay();
-
                 console.log("UI 업데이트 완료");
             }
 
-            // 서버에서 데이터 다시 로드 (UI 업데이트 이후에 백그라운드로 수행)
-            setTimeout(async () => {
-                try {
-                    console.log("백그라운드에서 메뉴 데이터 다시 로드");
-                    await loadCategories();
-                    await loadMenuData();
-                } catch (error) {
-                    console.error("백그라운드 데이터 로드 오류:", error);
-                }
-            }, 500);
+            // 즉시 서버에서 데이터 다시 로드 (클라이언트 변경 후)
+            try {
+                await loadCategories();
+                await loadMenuData();
+                console.log("서버에서 최신 데이터 로드 완료");
+            } catch (error) {
+                console.error("서버 데이터 로드 오류:", error);
+                // UI는 이미 업데이트되었으므로 사용자에게 오류를 표시하지 않음
+            }
 
             alert("카테고리가 추가되었습니다.");
         } catch (error) {
@@ -352,47 +343,17 @@ document.addEventListener("DOMContentLoaded", () => {
 async function loadCategories() {
     try {
         console.log("카테고리 목록 로딩 시작");
+        const url = `${API_BASE_URL}/api/categories`;
+        console.log(`API URL에서 카테고리 목록 로드 시도: ${url}`);
 
-        // 먼저 Render 서버에서 시도
-        try {
-            const renderUrl = "https://bariosk.onrender.com/api/categories";
-            console.log(
-                `Render 서버에서 카테고리 목록 로드 시도: ${renderUrl}`
-            );
+        const response = await apiRequest(url);
+        const categories = await response.json();
+        console.log("카테고리 목록 로드 성공:", categories);
 
-            const response = await apiRequest(renderUrl);
-            const categories = await response.json();
-            console.log("Render 서버에서 카테고리 목록 로드 성공:", categories);
-            updateCategorySelects(categories);
-            renderCategoryList(categories);
-            return categories;
-        } catch (renderError) {
-            console.warn(
-                "Render 서버에서 카테고리 목록 로드 실패:",
-                renderError
-            );
-
-            // 실패한 경우 설정된 API URL에서 시도
-            if (API_BASE_URL !== "https://bariosk.onrender.com") {
-                console.log(
-                    `설정된 API URL에서 카테고리 목록 로드 시도: ${API_BASE_URL}/api/categories`
-                );
-                const response = await apiRequest(
-                    `${API_BASE_URL}/api/categories`
-                );
-                const categories = await response.json();
-                console.log(
-                    "설정된 API URL에서 카테고리 목록 로드 성공:",
-                    categories
-                );
-                updateCategorySelects(categories);
-                renderCategoryList(categories);
-                return categories;
-            }
-
-            // 모두 실패한 경우 원래 오류 다시 던지기
-            throw renderError;
-        }
+        // UI 업데이트
+        updateCategorySelects(categories);
+        renderCategoryList(categories);
+        return categories;
     } catch (error) {
         console.error("카테고리 목록 로드 중 오류:", error);
         if (
@@ -577,41 +538,15 @@ function getTemperatureText(temperature) {
 async function loadMenuData() {
     try {
         console.log("메뉴 데이터 로딩 시작");
+        const url = `${API_BASE_URL}/api/menu`;
+        console.log(`API URL에서 메뉴 데이터 로드 시도: ${url}`);
 
-        // 먼저 Render 서버에서 시도
-        try {
-            const renderUrl = "https://bariosk.onrender.com/api/menu";
-            console.log(`Render 서버에서 메뉴 데이터 로드 시도: ${renderUrl}`);
+        const response = await apiRequest(url);
+        menuData = await response.json();
+        console.log("메뉴 데이터 로드 성공:", Object.keys(menuData));
 
-            const response = await apiRequest(renderUrl);
-            menuData = await response.json();
-            console.log(
-                "Render 서버에서 메뉴 데이터 로드 성공:",
-                Object.keys(menuData)
-            );
-            updateMenuDisplay();
-            return menuData;
-        } catch (renderError) {
-            console.warn("Render 서버에서 메뉴 데이터 로드 실패:", renderError);
-
-            // 실패한 경우 설정된 API URL에서 시도
-            if (API_BASE_URL !== "https://bariosk.onrender.com") {
-                console.log(
-                    `설정된 API URL에서 메뉴 데이터 로드 시도: ${API_BASE_URL}/api/menu`
-                );
-                const response = await apiRequest(`${API_BASE_URL}/api/menu`);
-                menuData = await response.json();
-                console.log(
-                    "설정된 API URL에서 메뉴 데이터 로드 성공:",
-                    Object.keys(menuData)
-                );
-                updateMenuDisplay();
-                return menuData;
-            }
-
-            // 모두 실패한 경우 원래 오류 다시 던지기
-            throw renderError;
-        }
+        updateMenuDisplay();
+        return menuData;
     } catch (error) {
         console.error("메뉴 데이터 로드 중 오류:", error);
         alert("메뉴 데이터를 불러오는데 실패했습니다: " + error.message);

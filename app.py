@@ -798,11 +798,59 @@ def serve_image(filename):
 def get_categories():
     try:
         print("=== 카테고리 목록 조회 시작 ===")
-        menu_data = load_menu_data()
-        categories = list(menu_data.keys())
-        print(f"조회된 카테고리 목록: {categories}")
-        print("=== 카테고리 목록 조회 완료 ===")
-        return jsonify(categories)
+        
+        try:
+            # 데이터베이스에서 직접 카테고리 조회 (중복 제거)
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT DISTINCT category 
+                FROM menu 
+                WHERE name != '_category_placeholder_' OR name IS NULL
+                ORDER BY category
+            """)
+            
+            db_categories = [row['category'] for row in cursor.fetchall()]
+            print(f"데이터베이스에서 조회된 카테고리 목록: {db_categories}")
+            
+            # 카테고리 플레이스홀더만 있는 카테고리 추가
+            cursor.execute("""
+                SELECT DISTINCT category 
+                FROM menu 
+                WHERE name = '_category_placeholder_'
+                ORDER BY category
+            """)
+            
+            placeholder_categories = [row['category'] for row in cursor.fetchall()]
+            print(f"플레이스홀더 카테고리 목록: {placeholder_categories}")
+            
+            # 두 목록 통합 (중복 제거)
+            all_categories = sorted(set(db_categories + placeholder_categories))
+            print(f"최종 카테고리 목록: {all_categories}")
+            
+            conn.close()
+            
+            # 백업: 데이터베이스에서 가져온 카테고리가 없으면 menu_data 사용
+            if not all_categories:
+                menu_data = load_menu_data()
+                all_categories = list(menu_data.keys())
+                print(f"menu_data에서 대체로 가져온 카테고리 목록: {all_categories}")
+            
+            print("=== 카테고리 목록 조회 완료 ===")
+            return jsonify(all_categories)
+            
+        except Exception as db_error:
+            print(f"데이터베이스에서 카테고리 조회 중 오류: {str(db_error)}")
+            
+            # 예비책: 데이터베이스 접근 실패 시 menu_data 사용
+            menu_data = load_menu_data()
+            categories = list(menu_data.keys())
+            print(f"예비 방식으로 조회된 카테고리 목록: {categories}")
+            
+            print("=== 카테고리 목록 조회 완료 (예비 방식) ===")
+            return jsonify(categories)
+            
     except Exception as e:
         print(f"카테고리 목록 조회 중 오류 발생: {str(e)}")
         import traceback
@@ -861,8 +909,51 @@ def add_category():
         
         # 변경된 데이터 저장
         try:
-            save_menu_data(menu_data)
-            print(f"카테고리 '{category_name}' 추가 및 저장 완료")
+            # SQLite에 직접 카테고리 추가 (빈 메뉴 항목으로)
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            try:
+                # 트랜잭션 시작
+                cursor.execute('BEGIN TRANSACTION')
+                
+                # 카테고리 존재 여부 확인 (다시 한번 체크)
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM menu 
+                    WHERE category = ?
+                """, (category_name,))
+                
+                if cursor.fetchone()[0] > 0:
+                    cursor.execute('ROLLBACK')
+                    return jsonify({'error': '이미 존재하는 카테고리입니다.'}), 400
+                
+                # 카테고리 더미 항목 추가 (표시되지 않는 시스템 항목)
+                # 이렇게 하면 항목이 없는 카테고리도 데이터베이스에 저장됨
+                cursor.execute("""
+                    INSERT INTO menu (category, name, price, image, temperature, order_index)
+                    VALUES (?, '_category_placeholder_', '0', 'logo.png', '', -1)
+                """, (category_name,))
+                
+                # 커밋
+                cursor.execute('COMMIT')
+                print(f"카테고리 '{category_name}'가 데이터베이스에 직접 추가되었습니다.")
+                
+                # 복원력을 위해 menu_data에도 추가
+                save_menu_data(menu_data)
+                print(f"카테고리 '{category_name}' 추가 및 저장 완료")
+                
+            except Exception as e:
+                cursor.execute('ROLLBACK')
+                print(f"카테고리 DB 추가 실패: {str(e)}")
+                
+                # 대체 방식으로 저장 시도
+                save_menu_data(menu_data)
+                print(f"대체 방식으로 카테고리 저장 시도")
+            
+            finally:
+                conn.close()
+                
         except Exception as e:
             print(f"카테고리 저장 실패: {str(e)}")
             import traceback
@@ -916,15 +1007,67 @@ def add_category():
 def delete_category(category_name):
     try:
         print(f"=== 카테고리 '{category_name}' 삭제 시작 ===")
-        menu_data = load_menu_data()
         
-        if category_name not in menu_data:
-            return jsonify({'error': '존재하지 않는 카테고리입니다.'}), 404
+        # 데이터베이스에서 직접 카테고리 삭제
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            # 트랜잭션 시작
+            cursor.execute('BEGIN TRANSACTION')
+            
+            # 카테고리 존재 여부 확인
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM menu 
+                WHERE category = ?
+            """, (category_name,))
+            
+            if cursor.fetchone()[0] == 0:
+                cursor.execute('ROLLBACK')
+                return jsonify({'error': '존재하지 않는 카테고리입니다.'}), 404
+            
+            # 해당 카테고리의 모든 항목 삭제
+            cursor.execute("""
+                DELETE FROM menu
+                WHERE category = ?
+            """, (category_name,))
+            
+            deleted_count = cursor.rowcount
+            print(f"삭제된 메뉴 항목 수: {deleted_count}")
+            
+            # 커밋
+            cursor.execute('COMMIT')
+            conn.close()
+            
+            print(f"카테고리 '{category_name}'가 데이터베이스에서 삭제되었습니다.")
+            
+        except Exception as db_error:
+            print(f"데이터베이스에서 카테고리 삭제 중 오류: {str(db_error)}")
+            if 'conn' in locals() and conn:
+                cursor.execute('ROLLBACK')
+                conn.close()
+            
+            # 예비책: 데이터베이스 직접 접근 실패 시 menu_data 사용
+            menu_data = load_menu_data()
+            
+            if category_name not in menu_data:
+                return jsonify({'error': '존재하지 않는 카테고리입니다.'}), 404
+            
+            # 카테고리 삭제
+            del menu_data[category_name]
+            save_menu_data(menu_data)
+            print(f"예비 방식으로 카테고리 '{category_name}' 삭제 완료")
         
-        # 카테고리 삭제
-        del menu_data[category_name]
-        save_menu_data(menu_data)
-        print(f"카테고리 '{category_name}' 삭제 완료")
+        # menu_data도 업데이트하여 동기화 상태 유지
+        try:
+            menu_data = load_menu_data()
+            if category_name in menu_data:
+                del menu_data[category_name]
+                save_menu_data(menu_data)
+                print(f"menu_data에서 카테고리 '{category_name}' 삭제 완료")
+        except Exception as sync_error:
+            print(f"menu_data 동기화 중 오류 (무시됨): {str(sync_error)}")
         
         # Render 서버와 동기화 (로컬 환경에서만)
         if not os.environ.get('RENDER'):
