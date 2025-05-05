@@ -222,10 +222,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
             addCategoryForm.reset();
 
-            // 데이터 다시 로드
-            console.log("카테고리 추가 성공, 데이터 다시 로드");
-            await loadCategories();
-            await loadMenuData();
+            // 로컬 menuData에 카테고리 추가 (페이지 새로고침 없이 작동하도록)
+            if (!menuData[categoryName]) {
+                menuData[categoryName] = [];
+                console.log(`로컬 menuData에 카테고리 추가: ${categoryName}`);
+
+                // 카테고리 선택 옵션 업데이트
+                updateCategorySelects(Object.keys(menuData));
+
+                // 카테고리 목록 렌더링
+                renderCategoryList(Object.keys(menuData));
+
+                // 메뉴 표시 업데이트
+                updateMenuDisplay();
+
+                console.log("UI 업데이트 완료");
+            }
+
+            // 서버에서 데이터 다시 로드 (UI 업데이트 이후에 백그라운드로 수행)
+            setTimeout(async () => {
+                try {
+                    console.log("백그라운드에서 메뉴 데이터 다시 로드");
+                    await loadCategories();
+                    await loadMenuData();
+                } catch (error) {
+                    console.error("백그라운드 데이터 로드 오류:", error);
+                }
+            }, 500);
 
             alert("카테고리가 추가되었습니다.");
         } catch (error) {

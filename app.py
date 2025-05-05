@@ -49,12 +49,32 @@ if os.environ.get('RENDER'):
                 os.makedirs(RENDER_DISK_PATH)
             print(f"대체 디스크 경로 사용: {RENDER_DISK_PATH}")
         
-        DATABASE = os.path.join(RENDER_DISK_PATH, 'menu.db')
+        # 데이터베이스 폴더 생성
+        DB_FOLDER = os.path.join(RENDER_DISK_PATH, 'db')
+        if not os.path.exists(DB_FOLDER):
+            os.makedirs(DB_FOLDER)
+            print(f"데이터베이스 폴더 생성: {DB_FOLDER}")
+        
+        DATABASE = os.path.join(DB_FOLDER, 'menu.db')
         print(f"Render 환경 감지됨. 데이터베이스 경로: {DATABASE}")
         print(f"Render 디스크 경로 존재 여부: {os.path.exists(RENDER_DISK_PATH)}")
         print(f"데이터베이스 파일 경로 존재 여부: {os.path.exists(DATABASE)}")
+        
+        # 디렉토리 권한 확인 및 설정
+        try:
+            if os.path.exists(DB_FOLDER):
+                os.chmod(DB_FOLDER, 0o777)  # 모든 사용자에게 쓰기 권한 부여
+                print(f"데이터베이스 폴더 권한 설정: {DB_FOLDER}")
+            if os.path.exists(RENDER_DISK_PATH):
+                os.chmod(RENDER_DISK_PATH, 0o777)
+                print(f"Render 디스크 경로 권한 설정: {RENDER_DISK_PATH}")
+        except Exception as e:
+            print(f"권한 설정 실패: {str(e)}")
     except Exception as e:
         print(f"Render 환경 설정 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         raise
 else:
     # 로컬 환경
@@ -297,67 +317,115 @@ def load_menu_data():
 def save_menu_data(data):
     try:
         print("=== 메뉴 데이터 저장 시작 ===")
-        print(f"저장할 메뉴 데이터: {data}")
+        print(f"저장할 메뉴 데이터: {json.dumps(data, ensure_ascii=False)[:200]}...")
         
         # 데이터 유효성 검사
         if not isinstance(data, dict):
             raise ValueError("메뉴 데이터가 올바른 형식이 아닙니다.")
         
-        with get_db() as db:
-            # 트랜잭션 시작
-            db.execute('BEGIN TRANSACTION')
-            
+        # Render 환경에서 권한 확인
+        if os.environ.get('RENDER'):
             try:
-                # 기존 데이터 백업
-                backup_data = {}
-                cursor = db.execute('SELECT * FROM menu')
-                for row in cursor:
-                    category = row['category']
-                    if category not in backup_data:
-                        backup_data[category] = []
-                    backup_data[category].append(dict(row))
+                # 데이터베이스 디렉토리 확인
+                db_dir = os.path.dirname(DATABASE)
+                if not os.path.exists(db_dir):
+                    print(f"데이터베이스 디렉토리 생성: {db_dir}")
+                    os.makedirs(db_dir, exist_ok=True)
+                    # 권한 설정
+                    os.chmod(db_dir, 0o777)
                 
-                # 기존 데이터 삭제
-                db.execute('DELETE FROM menu')
-                print("기존 데이터 삭제 완료")
-                
-                # 새 데이터 저장 (순서 유지를 위해 order_index 사용)
-                for category, items in data.items():
-                    for index, item in enumerate(items):
-                        try:
-                            # 필수 필드 검증
-                            if not all(k in item for k in ['id', 'name', 'price', 'image']):
-                                raise ValueError(f"필수 필드가 누락된 메뉴 항목이 있습니다: {item}")
-                            
-                            order_index = item.get('order_index', index)
-                            print(f"저장할 항목: id={item['id']}, category={category}, name={item['name']}, price={item['price']}, image={item['image']}, temperature={item.get('temperature', '')}, order_index={order_index}")
-                            
-                            db.execute(
-                                'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), order_index)
-                            )
-                            print(f"메뉴 항목 저장 성공: {item['name']}")
-                        except Exception as e:
-                            print(f"메뉴 항목 저장 실패: {str(e)}")
-                            # 실패 시 백업 데이터로 복원
-                            db.execute('ROLLBACK')
-                            save_menu_data(backup_data)
-                            raise
-                
-                db.commit()
-                print("모든 메뉴 데이터 저장 완료")
-                
-                # 저장된 데이터 확인
-                cursor = db.execute('SELECT * FROM menu ORDER BY category, order_index')
-                saved_data = cursor.fetchall()
-                print(f"저장된 데이터 확인: {len(saved_data)}개 항목")
-                for row in saved_data:
-                    print(f"저장된 항목: {dict(row)}")
-                
+                # 데이터베이스 파일이 이미 존재하면 권한 확인
+                if os.path.exists(DATABASE):
+                    try:
+                        os.chmod(DATABASE, 0o666)
+                        print(f"데이터베이스 파일 권한 설정: {DATABASE}")
+                    except Exception as e:
+                        print(f"데이터베이스 파일 권한 설정 실패: {str(e)}")
             except Exception as e:
-                print(f"데이터 저장 중 오류 발생: {str(e)}")
-                db.execute('ROLLBACK')
-                raise
+                print(f"Render 환경 디렉토리 확인 실패: {str(e)}")
+        
+        # 실제 저장 시도
+        try:
+            with get_db() as db:
+                # 트랜잭션 시작
+                db.execute('BEGIN TRANSACTION')
+                
+                try:
+                    # 기존 데이터 백업
+                    backup_data = {}
+                    cursor = db.execute('SELECT * FROM menu')
+                    for row in cursor:
+                        category = row['category']
+                        if category not in backup_data:
+                            backup_data[category] = []
+                        backup_data[category].append(dict(row))
+                    
+                    # 기존 데이터 삭제
+                    db.execute('DELETE FROM menu')
+                    print("기존 데이터 삭제 완료")
+                    
+                    # 새 데이터 저장 (순서 유지를 위해 order_index 사용)
+                    for category, items in data.items():
+                        for index, item in enumerate(items):
+                            try:
+                                # 필수 필드 검증
+                                if not all(k in item for k in ['id', 'name', 'price', 'image']):
+                                    print(f"경고: 필수 필드가 누락된 메뉴 항목이 있습니다: {item}")
+                                    # 누락된 필드 채우기
+                                    if 'id' not in item:
+                                        item['id'] = index + 1000  # 임의의 ID 생성
+                                    if 'name' not in item:
+                                        item['name'] = f"메뉴항목_{item['id']}"
+                                    if 'price' not in item:
+                                        item['price'] = "0"
+                                    if 'image' not in item:
+                                        item['image'] = "logo.png"
+                                
+                                order_index = item.get('order_index', index)
+                                print(f"저장할 항목: id={item['id']}, category={category}, name={item['name']}")
+                                
+                                db.execute(
+                                    'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                    (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), order_index)
+                                )
+                                print(f"메뉴 항목 저장 성공: {item['name']}")
+                            except Exception as e:
+                                print(f"메뉴 항목 저장 실패: {str(e)}")
+                                print(f"실패한 항목: {item}")
+                                continue  # 단일 항목 실패 시 계속 진행
+                    
+                    # 커밋 전 확인
+                    db.commit()
+                    print("모든 메뉴 데이터 저장 완료")
+                    
+                    # 저장된 데이터 확인
+                    cursor = db.execute('SELECT COUNT(*) FROM menu')
+                    count = cursor.fetchone()[0]
+                    print(f"저장된 데이터 확인: {count}개 항목")
+                    
+                except Exception as e:
+                    print(f"데이터 저장 중 오류 발생: {str(e)}")
+                    db.execute('ROLLBACK')
+                    raise
+        except Exception as e:
+            print(f"데이터베이스 연결 또는 트랜잭션 오류: {str(e)}")
+            
+            # 실패 시 파일 직접 쓰기 시도 (비상 조치)
+            if os.environ.get('RENDER'):
+                try:
+                    print("비상 조치: 데이터를 JSON 파일로 저장 시도")
+                    backup_path = os.path.join(os.path.dirname(DATABASE), 'menu_backup.json')
+                    with open(backup_path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                    print(f"백업 파일 저장 성공: {backup_path}")
+                except Exception as backup_error:
+                    print(f"백업 파일 저장 실패: {str(backup_error)}")
+            raise
+            
+        # 저장 결과 확인
+        if os.path.exists(DATABASE):
+            file_size = os.path.getsize(DATABASE)
+            print(f"저장 후 데이터베이스 파일 크기: {file_size} bytes")
             
         print("=== 메뉴 데이터 저장 완료 ===")
     except Exception as e:
@@ -775,6 +843,13 @@ def add_category():
         if not category_name:
             return jsonify({'error': '카테고리 이름이 필요합니다.'}), 400
         
+        # 데이터베이스 초기화 확인
+        try:
+            ensure_db()
+        except Exception as e:
+            print(f"데이터베이스 초기화 확인 실패: {str(e)}")
+        
+        # 메뉴 데이터 로드
         menu_data = load_menu_data()
         print(f"현재 메뉴 데이터: {menu_data}")
         
@@ -785,8 +860,28 @@ def add_category():
         menu_data[category_name] = []
         
         # 변경된 데이터 저장
-        save_menu_data(menu_data)
-        print(f"카테고리 '{category_name}' 추가 및 저장 완료")
+        try:
+            save_menu_data(menu_data)
+            print(f"카테고리 '{category_name}' 추가 및 저장 완료")
+        except Exception as e:
+            print(f"카테고리 저장 실패: {str(e)}")
+            import traceback
+            print("상세 오류:")
+            print(traceback.format_exc())
+            return jsonify({'error': f'카테고리 저장 실패: {str(e)}'}), 500
+        
+        # 데이터베이스 파일이 제대로 저장되었는지 확인
+        if os.path.exists(DATABASE):
+            file_size = os.path.getsize(DATABASE)
+            print(f"데이터베이스 파일 크기: {file_size} bytes")
+            # 파일 권한 확인
+            try:
+                os.chmod(DATABASE, 0o666)  # 읽기/쓰기 권한 부여
+                print(f"데이터베이스 파일 권한 설정: {DATABASE}")
+            except Exception as e:
+                print(f"데이터베이스 파일 권한 설정 실패: {str(e)}")
+        else:
+            print(f"경고: 데이터베이스 파일이 저장되지 않았습니다: {DATABASE}")
         
         # Render 서버와 동기화 (로컬 환경에서만)
         if not os.environ.get('RENDER'):
