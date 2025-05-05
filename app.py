@@ -1380,6 +1380,32 @@ def update_category_order():
             conn.close()
             
             print("카테고리 순서 업데이트 완료")
+            
+            # Render 서버와 동기화 (모든 환경에서)
+            try:
+                # 현재 호스트가 렌더 서버가 아닌 경우에만 렌더 서버로 동기화 요청 보냄
+                if not os.environ.get('RENDER') and "bariosk.onrender.com" not in request.host_url:
+                    print("Render 서버에 카테고리 순서 동기화 요청 보내기")
+                    response = requests.put(
+                        f"https://bariosk.onrender.com/api/categories/order",
+                        json={'categories': categories},
+                        headers={'Content-Type': 'application/json'},
+                        timeout=10  # 타임아웃 10초 설정
+                    )
+                    
+                    print(f"Render 서버 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        print("Render 서버에서 카테고리 순서 동기화 성공")
+                    else:
+                        print(f"Render 서버에서 카테고리 순서 동기화 실패: {response.text}")
+                elif os.environ.get('RENDER'):
+                    print("현재 Render 서버에서 실행 중이므로 동기화 생략")
+                else:
+                    print("동일 서버 내에서 작업 중이므로 동기화 생략")
+            except Exception as e:
+                print(f"Render 서버 동기화 중 오류: {str(e)}")
+                # Render 서버 동기화 실패는 무시하고 계속 진행
+            
             return jsonify({'message': '카테고리 순서가 업데이트되었습니다.'}), 200
             
         except Exception as db_error:

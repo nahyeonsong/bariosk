@@ -415,7 +415,7 @@ async function loadCategories() {
         console.log(`API URL에서 카테고리 목록 로드 시도: ${url}`);
 
         // 서버에서 카테고리 목록 로드
-        const response = await apiRequest(url);
+        const response = await apiRequest(url, {}, 3); // 재시도 횟수 증가
         let serverCategories = await response.json();
         console.log("서버에서 카테고리 목록 로드 응답:", serverCategories);
 
@@ -443,36 +443,15 @@ async function loadCategories() {
                 console.log("빈 응답으로 기본 카테고리 사용");
             }
         } else {
-            // 서버에서 카테고리 목록을 받았을 때
-            if (savedCategories && savedCategories.length > 0) {
-                // 서버 카테고리와 저장된 순서를 비교하여 병합
-                console.log("서버 카테고리와 저장된 순서 병합");
+            // 서버 카테고리 항상 우선 사용 (기존 로직 수정)
+            finalCategories = serverCategories;
+            console.log("서버 카테고리 순서 우선 사용");
 
-                // 1. 새로운 배열(서버에 있지만 저장된 순서에 없는 카테고리) 추출
-                const newCategories = serverCategories.filter(
-                    (cat) => !savedCategories.includes(cat)
-                );
-
-                // 2. 삭제된 배열(저장된 순서에 있지만 서버에 없는 카테고리) 제거
-                const validSavedCategories = savedCategories.filter((cat) =>
-                    serverCategories.includes(cat)
-                );
-
-                // 3. 최종 카테고리 목록 생성 (유효한 저장 순서 + 새 카테고리)
-                finalCategories = [...validSavedCategories, ...newCategories];
-
-                console.log("병합된 카테고리 목록:", finalCategories);
-            } else {
-                // 저장된 순서가 없으면 서버 카테고리 그대로 사용
-                finalCategories = serverCategories;
-                console.log("서버 카테고리 순서 그대로 사용");
-            }
+            // 로컬 스토리지 업데이트
+            saveCategoryOrderToLocalStorage(finalCategories);
         }
 
         console.log("카테고리 목록 최종:", finalCategories);
-
-        // 최종 카테고리 목록을 로컬 스토리지에 저장
-        saveCategoryOrderToLocalStorage(finalCategories);
 
         // UI 업데이트
         updateCategorySelects(finalCategories);
@@ -1567,12 +1546,27 @@ async function saveCategoryOrder(categories) {
 
         // 응답 처리
         try {
-            return await response.json();
+            const result = await response.json();
+            console.log("카테고리 순서 저장 완료, 서버 응답:", result);
+
+            // 서버와 동기화를 위해 잠시 대기 후 서버에서 다시 로드
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            console.log("서버에서 카테고리 목록 다시 로드");
+            const freshCategories = await loadCategories();
+            console.log("서버에서 새로 로드된 카테고리 목록:", freshCategories);
+
+            return result;
         } catch (jsonError) {
             console.warn(
                 "서버 응답 처리 중 JSON 파싱 오류 (무시됨):",
                 jsonError
             );
+
+            // JSON 파싱 오류가 있어도 서버에서 다시 로드
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            console.log("서버에서 카테고리 목록 다시 로드 (JSON 오류 후)");
+            await loadCategories();
+
             return { success: true };
         }
     } catch (error) {
