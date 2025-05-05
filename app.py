@@ -320,7 +320,7 @@ def load_menu_data():
             # 카테고리별로 데이터를 가져오되, order_index 순서로 정렬하고 시스템 항목 제외
             cursor = db.execute('''
                 SELECT * FROM menu 
-                WHERE order_index > -900 OR name != '시스템 항목'
+                WHERE order_index > -900 OR name != 'bariosk'
                 ORDER BY category, order_index
             ''')
             menu_data = {}
@@ -395,12 +395,12 @@ def save_menu_data(data):
                 try:
                     # 시스템 항목을 제외한 데이터 백업
                     backup_data = {}
-                    cursor = db.execute('SELECT * FROM menu WHERE name = "시스템 항목" OR order_index <= -900')
+                    cursor = db.execute('SELECT * FROM menu WHERE name = "bariosk" OR order_index <= -900')
                     system_items = [dict(row) for row in cursor.fetchall()]
                     print(f"보존할 시스템 항목 수: {len(system_items)}")
                     
                     # 정규 메뉴 항목만 삭제
-                    db.execute('DELETE FROM menu WHERE name != "시스템 항목" AND order_index > -900')
+                    db.execute('DELETE FROM menu WHERE name != "bariosk" AND order_index > -900')
                     print("정규 메뉴 항목 삭제 완료")
                     
                     # 새 데이터 저장 (순서 유지를 위해 order_index 사용)
@@ -423,7 +423,7 @@ def save_menu_data(data):
                                 order_index = item.get('order_index', index)
                                 
                                 # 시스템 항목이 아닌 경우만 저장
-                                if item['name'] != "시스템 항목" and order_index > -900:
+                                if item['name'] != "bariosk" and order_index > -900:
                                     db.execute(
                                         'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
                                         (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), order_index)
@@ -441,7 +441,7 @@ def save_menu_data(data):
                             # 카테고리가 없으면 시스템 항목 추가
                             db.execute(
                                 'INSERT INTO menu (category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?)',
-                                (category, "시스템 항목", "0", "logo.png", "", -999)
+                                (category, "bariosk", "0", "logo.png", "", -999)
                             )
                             print(f"빈 카테고리 유지를 위한 시스템 항목 추가: {category}")
                     
