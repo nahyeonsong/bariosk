@@ -184,30 +184,53 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         try {
-            const response = await apiRequest(
-                `${API_BASE_URL}/api/categories`,
-                {
-                    method: "POST",
-                    body: JSON.stringify({ name: categoryName }),
-                }
-            );
+            console.log(`카테고리 추가 시도: ${categoryName}`);
+
+            // 직접 Render 서버로 요청 전송
+            const url = "https://bariosk.onrender.com/api/categories";
+            console.log(`카테고리 추가 요청 URL: ${url}`);
+
+            const requestData = JSON.stringify({ name: categoryName });
+            console.log(`요청 데이터: ${requestData}`);
+
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                },
+                body: requestData,
+            });
+
+            console.log(`응답 상태: ${response.status}`);
+            const responseText = await response.text();
+            console.log(`응답 텍스트: ${responseText}`);
+
+            let responseData;
+            try {
+                responseData = JSON.parse(responseText);
+            } catch (e) {
+                console.error("응답 JSON 파싱 오류:", e);
+                responseData = { message: responseText };
+            }
+
+            if (!response.ok) {
+                throw new Error(
+                    responseData.error || `서버 오류: ${response.status}`
+                );
+            }
 
             addCategoryForm.reset();
+
+            // 데이터 다시 로드
+            console.log("카테고리 추가 성공, 데이터 다시 로드");
             await loadCategories();
-            await loadMenuData(); // 메뉴 데이터도 새로고침하여 카테고리 옵션 업데이트
+            await loadMenuData();
+
             alert("카테고리가 추가되었습니다.");
         } catch (error) {
-            console.error("Error:", error);
-            if (
-                error.message.includes("Failed to fetch") ||
-                error.message.includes("요청 시간이 초과")
-            ) {
-                alert(
-                    "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
-                );
-            } else {
-                alert("카테고리 추가 중 오류가 발생했습니다: " + error.message);
-            }
+            console.error("카테고리 추가 중 오류:", error);
+            alert("카테고리 추가 중 오류가 발생했습니다: " + error.message);
         }
     });
 

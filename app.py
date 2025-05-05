@@ -728,14 +728,46 @@ def serve_image(filename):
 
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
-    menu_data = load_menu_data()
-    return jsonify(list(menu_data.keys()))
+    try:
+        print("=== 카테고리 목록 조회 시작 ===")
+        menu_data = load_menu_data()
+        categories = list(menu_data.keys())
+        print(f"조회된 카테고리 목록: {categories}")
+        print("=== 카테고리 목록 조회 완료 ===")
+        return jsonify(categories)
+    except Exception as e:
+        print(f"카테고리 목록 조회 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/categories', methods=['POST'])
 def add_category():
     try:
         print("=== 카테고리 추가 시작 ===")
-        data = request.get_json()
+        # 요청 데이터 로깅
+        print(f"요청 Content-Type: {request.content_type}")
+        print(f"요청 데이터: {request.data}")
+        
+        # Content-Type에 따라 데이터 파싱
+        if request.content_type and 'application/json' in request.content_type:
+            data = request.get_json(silent=True)
+            if data is None:
+                print("JSON 파싱 실패, 폼 데이터로 시도")
+                data = request.form.to_dict()
+        else:
+            data = request.form.to_dict()
+            if not data and request.data:
+                # JSON 문자열로 시도
+                try:
+                    data = json.loads(request.data.decode('utf-8'))
+                    print(f"JSON 문자열로 파싱: {data}")
+                except json.JSONDecodeError as e:
+                    print(f"JSON 파싱 오류: {str(e)}")
+                    data = {}
+        
+        print(f"파싱된 데이터: {data}")
         category_name = data.get('name')
         
         print(f"추가할 카테고리: {category_name}")
