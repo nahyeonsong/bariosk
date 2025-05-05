@@ -6,6 +6,8 @@ const API_BASE_URL =
         ? "https://bariosk.onrender.com"
         : "http://localhost:5000";
 
+console.log("현재 API URL:", API_BASE_URL);
+
 // 전역 변수
 let isAdminMode = false;
 let cart = [];
@@ -14,6 +16,50 @@ let menuData = {};
 // 드래그 앤 드롭 관련 변수
 let draggedItem = null;
 let dragStartIndex = null;
+
+// 요청 타임아웃 설정
+const REQUEST_TIMEOUT = 15000; // 15초
+
+// API 요청 함수 (타임아웃 처리 추가)
+async function apiRequest(url, options = {}) {
+    try {
+        // AbortController를 사용하여 타임아웃 설정
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+            headers: {
+                "Content-Type": "application/json",
+                ...options.headers,
+            },
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            let errorMessage;
+            try {
+                const errorData = await response.json();
+                errorMessage =
+                    errorData.error || `서버 오류: ${response.status}`;
+            } catch (e) {
+                errorMessage = `서버 오류: ${response.status}`;
+            }
+            throw new Error(errorMessage);
+        }
+
+        return response;
+    } catch (error) {
+        if (error.name === "AbortError") {
+            throw new Error(
+                "요청 시간이 초과되었습니다. 서버 응답이 지연되고 있습니다."
+            );
+        }
+        throw error;
+    }
+}
 
 // DOM이 로드되면 실행
 document.addEventListener("DOMContentLoaded", () => {
@@ -83,28 +129,30 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
 
         const categoryName = document.getElementById("newCategoryName").value;
+        if (!categoryName.trim()) {
+            alert("카테고리 이름을 입력해주세요.");
+            return;
+        }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/categories`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ name: categoryName }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "카테고리 추가 실패");
-            }
+            const response = await apiRequest(
+                `${API_BASE_URL}/api/categories`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ name: categoryName }),
+                }
+            );
 
             addCategoryForm.reset();
-            loadCategories();
-            loadMenuData(); // 메뉴 데이터도 새로고침하여 카테고리 옵션 업데이트
+            await loadCategories();
+            await loadMenuData(); // 메뉴 데이터도 새로고침하여 카테고리 옵션 업데이트
             alert("카테고리가 추가되었습니다.");
         } catch (error) {
             console.error("Error:", error);
-            if (error.message.includes("Failed to fetch")) {
+            if (
+                error.message.includes("Failed to fetch") ||
+                error.message.includes("요청 시간이 초과")
+            ) {
                 alert(
                     "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
                 );
@@ -208,17 +256,20 @@ document.addEventListener("DOMContentLoaded", () => {
 // 카테고리 목록 로드
 async function loadCategories() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/categories`);
-        if (!response.ok) {
-            throw new Error("카테고리 목록 로드 실패");
-        }
-
+        console.log("카테고리 목록 로딩 시작");
+        const response = await apiRequest(`${API_BASE_URL}/api/categories`);
         const categories = await response.json();
+
+        console.log("로드된 카테고리:", categories);
         updateCategorySelects(categories);
         renderCategoryList(categories);
+        return categories;
     } catch (error) {
-        console.error("Error:", error);
-        if (error.message.includes("Failed to fetch")) {
+        console.error("카테고리 목록 로드 중 오류:", error);
+        if (
+            error.message.includes("Failed to fetch") ||
+            error.message.includes("요청 시간이 초과")
+        ) {
             alert(
                 "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
             );
@@ -228,6 +279,7 @@ async function loadCategories() {
                     error.message
             );
         }
+        return [];
     }
 }
 
@@ -249,6 +301,8 @@ function updateCategorySelects(categories) {
 // 카테고리 목록 렌더링
 function renderCategoryList(categories) {
     const categoryList = document.getElementById("categoryList");
+    if (!categoryList) return;
+
     categoryList.innerHTML = categories
         .map(
             (category) => `
@@ -303,24 +357,17 @@ function renderCategoryList(categories) {
                 }
 
                 try {
-                    const response = await fetch(
+                    const response = await apiRequest(
                         `${API_BASE_URL}/api/categories/${encodeURIComponent(
                             category
                         )}`,
                         {
                             method: "PUT",
-                            headers: {
-                                "Content-Type": "application/json",
-                            },
                             body: JSON.stringify({ name: newName }),
                         }
                     );
 
                     const data = await response.json();
-
-                    if (!response.ok) {
-                        throw new Error(data.error || "카테고리 수정 실패");
-                    }
 
                     // 서버 응답 메시지에 따라 다른 동작 수행
                     if (data.message === "이미 존재하는 카테고리 이름입니다") {
@@ -336,15 +383,18 @@ function renderCategoryList(categories) {
                         buttonContainer.remove();
                         actionsDiv.style.display = "flex";
                     } else {
-                        loadCategories();
-                        loadMenuData();
+                        await loadCategories();
+                        await loadMenuData();
                         alert("카테고리가 수정되었습니다.");
                     }
                 } catch (error) {
-                    console.error("Error:", error);
+                    console.error("카테고리 수정 중 오류:", error);
                     alert(
                         "카테고리 수정 중 오류가 발생했습니다: " + error.message
                     );
+                    input.replaceWith(nameSpan);
+                    buttonContainer.remove();
+                    actionsDiv.style.display = "flex";
                 }
             });
 
@@ -364,7 +414,7 @@ function renderCategoryList(categories) {
 
             if (confirm(`정말로 "${category}" 카테고리를 삭제하시겠습니까?`)) {
                 try {
-                    const response = await fetch(
+                    await apiRequest(
                         `${API_BASE_URL}/api/categories/${encodeURIComponent(
                             category
                         )}`,
@@ -373,15 +423,11 @@ function renderCategoryList(categories) {
                         }
                     );
 
-                    if (!response.ok) {
-                        throw new Error("카테고리 삭제 실패");
-                    }
-
-                    loadCategories();
-                    loadMenuData();
+                    await loadCategories();
+                    await loadMenuData();
                     alert("카테고리가 삭제되었습니다.");
                 } catch (error) {
-                    console.error("Error:", error);
+                    console.error("카테고리 삭제 중 오류:", error);
                     alert(
                         "카테고리 삭제 중 오류가 발생했습니다: " + error.message
                     );
@@ -401,16 +447,16 @@ function getTemperatureText(temperature) {
 // 메뉴 데이터 로드
 async function loadMenuData() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/menu`);
-        if (!response.ok) {
-            throw new Error("메뉴 데이터를 불러오는데 실패했습니다.");
-        }
+        console.log("메뉴 데이터 로딩 시작");
+        const response = await apiRequest(`${API_BASE_URL}/api/menu`);
         menuData = await response.json();
-        console.log("Loaded menu data:", menuData); // 디버깅용
+        console.log("로드된 메뉴 데이터:", menuData); // 디버깅용
         updateMenuDisplay();
+        return menuData;
     } catch (error) {
-        console.error("Error loading menu data:", error);
-        alert("메뉴 데이터를 불러오는데 실패했습니다.");
+        console.error("메뉴 데이터 로드 중 오류:", error);
+        alert("메뉴 데이터를 불러오는데 실패했습니다: " + error.message);
+        return {};
     }
 }
 

@@ -447,21 +447,38 @@ def get_menu_from_render():
 
 def save_menu_to_render(data):
     try:
-        print(f"Render 서버에 저장할 데이터: {data}")
-        response = requests.put(f"{RENDER_API_URL}/api/menu", json=data)
+        print(f"Render 서버에 저장할 데이터: {json.dumps(data, ensure_ascii=False)[:500]}...")
+        
+        # 요청 헤더 설정
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
+        # 타임아웃 설정 (15초)
+        response = requests.put(
+            f"{RENDER_API_URL}/api/menu", 
+            json=data, 
+            headers=headers,
+            timeout=15
+        )
+        
         print(f"Render 서버 응답 상태 코드: {response.status_code}")
-        print(f"Render 서버 응답 내용: {response.text}")
+        print(f"Render 서버 응답 내용: {response.text[:200]}")
         
         if response.status_code == 200:
             print("메뉴 데이터가 Render 서버에 저장되었습니다.")
-            # 로컬 데이터베이스에도 저장
-            if not os.environ.get('RENDER'):
-                save_menu_data(data)
-                print("로컬 데이터베이스에도 메뉴 데이터 저장 완료")
             return True
         else:
             print(f"Render 서버에 메뉴 데이터를 저장하는데 실패했습니다: {response.status_code}")
+            print(f"응답 내용: {response.text[:200]}")
             return False
+    except requests.exceptions.RequestException as e:
+        print(f"Render 서버 요청 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
+        return False
     except Exception as e:
         print(f"Render 서버 연결 실패: {str(e)}")
         import traceback
@@ -707,30 +724,61 @@ def get_categories():
 @app.route('/api/categories', methods=['POST'])
 def add_category():
     try:
+        print("=== 카테고리 추가 시작 ===")
         data = request.get_json()
         category_name = data.get('name')
+        
+        print(f"추가할 카테고리: {category_name}")
         
         if not category_name:
             return jsonify({'error': '카테고리 이름이 필요합니다.'}), 400
         
         menu_data = load_menu_data()
+        print(f"현재 메뉴 데이터: {menu_data}")
         
         if category_name in menu_data:
             return jsonify({'error': '이미 존재하는 카테고리입니다.'}), 400
         
         # 새 카테고리 추가
         menu_data[category_name] = []
-        save_menu_data(menu_data)
         
+        # 변경된 데이터 저장
+        save_menu_data(menu_data)
+        print(f"카테고리 '{category_name}' 추가 및 저장 완료")
+        
+        # Render 서버와 동기화 (로컬 환경에서만)
+        if not os.environ.get('RENDER'):
+            try:
+                response = requests.post(
+                    f"{RENDER_API_URL}/api/categories",
+                    json={'name': category_name},
+                    headers={'Content-Type': 'application/json'},
+                    timeout=10  # 타임아웃 10초 설정
+                )
+                
+                print(f"Render 서버 응답 상태 코드: {response.status_code}")
+                if response.status_code == 201:
+                    print("Render 서버에 카테고리 추가 성공")
+                else:
+                    print(f"Render 서버에 카테고리 추가 실패: {response.text}")
+            except Exception as e:
+                print(f"Render 서버 동기화 중 오류: {str(e)}")
+                # Render 서버 동기화 실패는 무시하고 계속 진행
+        
+        print("=== 카테고리 추가 완료 ===")
         return jsonify({'message': f'카테고리 "{category_name}"가 추가되었습니다.'}), 201
         
     except Exception as e:
         print(f"카테고리 추가 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/categories/<category_name>', methods=['DELETE'])
 def delete_category(category_name):
     try:
+        print(f"=== 카테고리 '{category_name}' 삭제 시작 ===")
         menu_data = load_menu_data()
         
         if category_name not in menu_data:
@@ -739,20 +787,45 @@ def delete_category(category_name):
         # 카테고리 삭제
         del menu_data[category_name]
         save_menu_data(menu_data)
+        print(f"카테고리 '{category_name}' 삭제 완료")
         
+        # Render 서버와 동기화 (로컬 환경에서만)
+        if not os.environ.get('RENDER'):
+            try:
+                response = requests.delete(
+                    f"{RENDER_API_URL}/api/categories/{category_name}",
+                    timeout=10  # 타임아웃 10초 설정
+                )
+                
+                print(f"Render 서버 응답 상태 코드: {response.status_code}")
+                if response.status_code == 200:
+                    print("Render 서버에서 카테고리 삭제 성공")
+                else:
+                    print(f"Render 서버에서 카테고리 삭제 실패: {response.text}")
+            except Exception as e:
+                print(f"Render 서버 동기화 중 오류: {str(e)}")
+                # Render 서버 동기화 실패는 무시하고 계속 진행
+        
+        print(f"=== 카테고리 '{category_name}' 삭제 완료 ===")
         return jsonify({'message': f'카테고리 "{category_name}"가 삭제되었습니다.'}), 200
         
     except Exception as e:
         print(f"카테고리 삭제 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/categories/<category_name>', methods=['PUT'])
 def update_category(category_name):
     try:
+        print(f"=== 카테고리 '{category_name}' 수정 시작 ===")
         new_name = request.json.get('name')
         if not new_name:
             return jsonify({'error': '카테고리 이름이 필요합니다'}), 400
 
+        print(f"새 카테고리 이름: {new_name}")
+        
         # 메뉴 데이터 로드
         menu_data = load_menu_data()
 
@@ -771,10 +844,34 @@ def update_category(category_name):
         # 카테고리 이름 변경
         menu_data[new_name] = menu_data.pop(category_name)
         save_menu_data(menu_data)
-
+        print(f"카테고리 이름을 '{category_name}'에서 '{new_name}'으로 변경 완료")
+        
+        # Render 서버와 동기화 (로컬 환경에서만)
+        if not os.environ.get('RENDER'):
+            try:
+                response = requests.put(
+                    f"{RENDER_API_URL}/api/categories/{category_name}",
+                    json={'name': new_name},
+                    headers={'Content-Type': 'application/json'},
+                    timeout=10  # 타임아웃 10초 설정
+                )
+                
+                print(f"Render 서버 응답 상태 코드: {response.status_code}")
+                if response.status_code == 200:
+                    print("Render 서버에서 카테고리 수정 성공")
+                else:
+                    print(f"Render 서버에서 카테고리 수정 실패: {response.text}")
+            except Exception as e:
+                print(f"Render 서버 동기화 중 오류: {str(e)}")
+                # Render 서버 동기화 실패는 무시하고 계속 진행
+        
+        print(f"=== 카테고리 수정 완료 ===")
         return jsonify({'message': '카테고리가 수정되었습니다'}), 200
     except Exception as e:
         print(f"카테고리 수정 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 # 새로운 메뉴 ID 생성
