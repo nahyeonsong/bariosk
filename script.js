@@ -1837,45 +1837,61 @@ async function handleCategoryDrop(e) {
         console.log(`새 카테고리 순서:`, categories);
 
         try {
-            // 서버에 새 순서 저장 요청
-            console.log("서버에 카테고리 순서 업데이트 요청 전송");
-            const response = await fetch(
-                `${API_BASE_URL}/api/categories/order`,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Cache-Control": "no-cache, no-store, must-revalidate",
-                        Pragma: "no-cache",
-                    },
-                    body: JSON.stringify({ categories }),
+            // 로컬 스토리지에 카테고리 순서 저장
+            saveCategoryOrderToLocalStorage(categories);
+
+            // 메뉴 데이터를 새 순서대로 재정렬
+            const sortedMenuData = {};
+            categories.forEach((category) => {
+                if (menuData[category]) {
+                    sortedMenuData[category] = menuData[category];
                 }
-            );
+            });
+
+            // 혹시 빠진 카테고리가 있다면 추가
+            Object.keys(menuData).forEach((category) => {
+                if (!sortedMenuData[category]) {
+                    sortedMenuData[category] = menuData[category];
+                }
+            });
+
+            console.log("재정렬된 메뉴 데이터:", Object.keys(sortedMenuData));
+
+            // 메뉴 데이터 저장 API를 통해 순서 저장
+            const response = await fetch(`${API_BASE_URL}/api/menu`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    Pragma: "no-cache",
+                },
+                body: JSON.stringify(sortedMenuData),
+            });
 
             if (response.ok) {
-                console.log("서버 카테고리 순서 업데이트 성공");
-                // 성공 시에만 로컬 스토리지에도 백업
-                saveCategoryOrderToLocalStorage(categories);
-
-                // 화면 업데이트
-                updateCategorySelects(categories);
-                updateMenuDisplay(categories);
-            } else {
-                console.error(
-                    "서버 카테고리 순서 업데이트 실패:",
-                    response.status
+                console.log(
+                    "카테고리 순서 업데이트 성공 (메뉴 데이터 저장을 통해)"
                 );
+
+                // 서버에서 새로운 데이터 로드
+                await loadCategories();
+                await loadMenuData();
+                console.log(
+                    "카테고리와 메뉴 데이터를 서버에서 다시 로드했습니다."
+                );
+            } else {
+                console.error("카테고리 순서 업데이트 실패:", response.status);
                 alert(
                     "카테고리 순서 저장 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요."
                 );
                 // 실패 시 기존 순서로 복원
-                loadCategories();
+                await loadCategories();
             }
         } catch (error) {
             console.error("카테고리 순서 업데이트 중 오류:", error);
             alert("서버 연결 오류! 카테고리 순서 업데이트에 실패했습니다.");
             // 비정상 종료 시 기존 상태로 UI 복원
-            loadCategories();
+            await loadCategories();
         }
     }
 }
