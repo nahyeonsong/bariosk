@@ -13,11 +13,21 @@ import shutil
 import requests
 
 app = Flask(__name__, static_folder='static')
-CORS(app)
+# CORS 설정 - 모든 도메인에서의 요청 허용
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 # 설정
 UPLOAD_FOLDER = os.path.join('static', 'images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# 기본 경로에 액세스 헤더 설정 추가
+@app.after_request
+def add_cors_headers(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 # 데이터베이스 파일 경로 설정
 if os.environ.get('RENDER'):

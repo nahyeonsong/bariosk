@@ -5,18 +5,39 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta property="og:title" content="바리오스크" />
         <meta property="og:description" content="바리오스크 카페 메뉴" />
-        <meta
-            property="og:image"
-            content="https://bariosk.onrender.com/static/images/logo.png"
-        />
+        <meta property="og:image" content="/static/images/logo.png" />
         <meta property="og:image:width" content="800" />
         <meta property="og:image:height" content="400" />
-        <meta property="og:url" content="https://bariosk.onrender.com" />
+        <meta property="og:url" content="" />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
         <title>바리오스크</title>
         <link rel="stylesheet" href="styles.css" />
         <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+        <script>
+            // 현재 URL을 OG 태그에 설정
+            document.addEventListener("DOMContentLoaded", function () {
+                // og:url 메타 태그 업데이트
+                const ogUrlMeta = document.querySelector(
+                    'meta[property="og:url"]'
+                );
+                if (ogUrlMeta) {
+                    ogUrlMeta.setAttribute("content", window.location.href);
+                }
+
+                // og:image 메타 태그 업데이트 - 절대 URL 사용
+                const ogImageMeta = document.querySelector(
+                    'meta[property="og:image"]'
+                );
+                if (ogImageMeta) {
+                    const baseUrl = window.location.origin;
+                    ogImageMeta.setAttribute(
+                        "content",
+                        baseUrl + "/static/images/logo.png"
+                    );
+                }
+            });
+        </script>
     </head>
     <body>
         <header>

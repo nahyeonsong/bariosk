@@ -1,12 +1,35 @@
 // API 기본 URL 설정
-const API_BASE_URL =
-    window.location.hostname === "nahyeonsong.github.io"
-        ? "https://bariosk.onrender.com"
-        : window.location.hostname === "www.bariosk.com"
-        ? "https://bariosk.onrender.com"
-        : "http://localhost:5000";
+const API_BASE_URL = getApiBaseUrl();
 
-console.log("현재 API URL:", API_BASE_URL);
+// API 기본 URL 결정 함수
+function getApiBaseUrl() {
+    const hostname = window.location.hostname;
+    console.log("현재 호스트명:", hostname);
+
+    // Render 호스팅 도메인
+    if (
+        hostname === "bariosk.onrender.com" ||
+        hostname === "www.bariosk.com" ||
+        hostname === "bariosk.com"
+    ) {
+        return "https://bariosk.onrender.com";
+    }
+
+    // GitHub Pages
+    if (hostname === "nahyeonsong.github.io") {
+        return "https://bariosk.onrender.com";
+    }
+
+    // 로컬 개발 환경
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+        return "http://localhost:5000";
+    }
+
+    // 기타 모든 도메인 (커스텀 도메인 포함) - 현재 도메인을 그대로 사용
+    return window.location.origin;
+}
+
+console.log("사용할 API URL:", API_BASE_URL);
 
 // 전역 변수
 let isAdminMode = false;
