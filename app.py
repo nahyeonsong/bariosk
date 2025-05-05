@@ -109,6 +109,9 @@ def init_db():
         ''')
         conn.commit()
         print("테이블 생성 성공")
+        
+        # 테이블 구조 확인 및 필요시 업데이트
+        update_schema(conn)
 
         # 테이블에 데이터가 있는지 확인
         cursor = conn.execute('SELECT COUNT(*) FROM menu')
@@ -161,6 +164,53 @@ def init_db():
         print("데이터베이스 초기화 성공")
     except Exception as e:
         print(f"데이터베이스 초기화 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
+        raise
+
+# 데이터베이스 스키마 업데이트 함수
+def update_schema(conn):
+    try:
+        print("=== 데이터베이스 스키마 확인 시작 ===")
+        cursor = conn.cursor()
+        
+        # 현재 테이블의 칼럼 정보 가져오기
+        cursor.execute("PRAGMA table_info(menu)")
+        columns = cursor.fetchall()
+        column_names = [col['name'] for col in columns]
+        print(f"현재 테이블 칼럼: {column_names}")
+        
+        # order_index 칼럼이 없는 경우 추가
+        if 'order_index' not in column_names:
+            print("order_index 칼럼이 없어 추가합니다.")
+            cursor.execute("ALTER TABLE menu ADD COLUMN order_index INTEGER DEFAULT 0")
+            conn.commit()
+            print("order_index 칼럼 추가 완료")
+            
+            # 모든 레코드의 order_index 값을 업데이트
+            cursor.execute("SELECT id, category FROM menu ORDER BY id")
+            items = cursor.fetchall()
+            
+            # 카테고리별로 정렬하여 order_index 설정
+            category_indices = {}
+            for item in items:
+                category = item['category']
+                if category not in category_indices:
+                    category_indices[category] = 0
+                
+                cursor.execute(
+                    "UPDATE menu SET order_index = ? WHERE id = ?", 
+                    (category_indices[category], item['id'])
+                )
+                category_indices[category] += 1
+            
+            conn.commit()
+            print("order_index 값 업데이트 완료")
+        
+        print("=== 데이터베이스 스키마 확인 완료 ===")
+    except Exception as e:
+        print(f"데이터베이스 스키마 업데이트 실패: {str(e)}")
         import traceback
         print("상세 오류:")
         print(traceback.format_exc())
@@ -430,11 +480,13 @@ def get_menu():
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='menu'")
         if not cursor.fetchone():
             print("menu 테이블이 존재하지 않습니다.")
-            init_db()
-            # 새로운 연결 생성
             conn.close()
+            init_db()
             conn = get_db()
             cursor = conn.cursor()
+        else:
+            # 테이블이 존재하면 스키마 업데이트 확인
+            update_schema(conn)
         
         try:
             # 카테고리별로 메뉴 조회
