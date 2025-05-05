@@ -1253,14 +1253,23 @@ async function handleDrop() {
             });
 
             if (!response.ok) {
-                throw new Error("메뉴 순서 저장 실패");
+                // 응답이 JSON이 아닐 수 있으므로 안전하게 처리
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || "메뉴 순서 저장 실패");
+                } catch (jsonError) {
+                    console.error("JSON 파싱 오류:", jsonError);
+                    throw new Error(
+                        `메뉴 순서 저장 실패 (상태 코드: ${response.status})`
+                    );
+                }
             }
 
             // UI 업데이트
             updateMenuDisplay();
         } catch (error) {
             console.error("Error:", error);
-            alert("메뉴 순서 저장 중 오류가 발생했습니다.");
+            alert("메뉴 순서 저장 중 오류가 발생했습니다: " + error.message);
         }
     }
 }
@@ -1366,12 +1375,28 @@ async function cloneMenuItem(itemId) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "Failed to clone menu item");
+            // 응답이 JSON이 아닐 수 있으므로 안전하게 처리
+            try {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to clone menu item");
+            } catch (jsonError) {
+                console.error("JSON 파싱 오류:", jsonError);
+                throw new Error(
+                    `메뉴 복제 실패 (상태 코드: ${response.status})`
+                );
+            }
         }
 
-        const result = await response.json();
-        console.log("Menu item cloned successfully:", result);
+        // 응답 처리
+        try {
+            const result = await response.json();
+            console.log("Menu item cloned successfully:", result);
+        } catch (jsonError) {
+            console.warn(
+                "복제 성공 응답 처리 중 JSON 파싱 오류 (무시됨):",
+                jsonError
+            );
+        }
 
         // Refresh the menu display
         await loadMenuData();
@@ -1396,8 +1421,16 @@ async function deleteMenuItem(menuId, category) {
             );
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "메뉴 삭제 실패");
+                // 응답이 JSON이 아닐 수 있으므로 안전하게 처리
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || "메뉴 삭제 실패");
+                } catch (jsonError) {
+                    console.error("JSON 파싱 오류:", jsonError);
+                    throw new Error(
+                        `메뉴 삭제 실패 (상태 코드: ${response.status})`
+                    );
+                }
             }
 
             // 메뉴 데이터 새로고침
@@ -1520,14 +1553,31 @@ async function saveCategoryOrder(categories) {
 
         // 응답 확인
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "카테고리 순서 저장 실패");
+            // 응답이 JSON이 아닐 수 있으므로 안전하게 처리
+            try {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "카테고리 순서 저장 실패");
+            } catch (jsonError) {
+                console.error("JSON 파싱 오류:", jsonError);
+                throw new Error(
+                    `카테고리 순서 저장 실패 (상태 코드: ${response.status})`
+                );
+            }
         }
 
         // 성공적으로 서버에 저장되면 로컬 스토리지에도 저장
         saveCategoryOrderToLocalStorage(categories);
 
-        return await response.json();
+        // 응답 처리
+        try {
+            return await response.json();
+        } catch (jsonError) {
+            console.warn(
+                "서버 응답 처리 중 JSON 파싱 오류 (무시됨):",
+                jsonError
+            );
+            return { success: true };
+        }
     } catch (error) {
         console.error("카테고리 순서 저장 오류:", error);
         throw error;
