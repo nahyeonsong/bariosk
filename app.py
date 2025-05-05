@@ -154,10 +154,16 @@ def init_db():
                 # 초기 데이터 저장
                 for category, items in initial_data.items():
                     for item in items:
-                        db.execute(
-                            'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), item.get('order_index', 0))
-                        )
+                        try:
+                            db.execute(
+                                'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), item.get('order_index', 0))
+                            )
+                            print(f"초기 메뉴 항목 저장 성공: {item['name']}")
+                        except Exception as e:
+                            print(f"초기 메뉴 항목 저장 실패: {str(e)}")
+                            continue
+                
                 db.commit()
                 print("초기 데이터 삽입 완료")
             else:
@@ -168,6 +174,7 @@ def init_db():
 
 def load_menu_data():
     try:
+        print("=== 메뉴 데이터 로드 시작 ===")
         with get_db() as db:
             # 카테고리별로 데이터를 가져오되, order_index 순서로 정렬
             cursor = db.execute('''
@@ -188,6 +195,7 @@ def load_menu_data():
                     'order_index': row['order_index']
                 })
             print(f"메뉴 데이터 로드 성공: {menu_data}")
+            print("=== 메뉴 데이터 로드 완료 ===")
             return menu_data
     except Exception as e:
         print(f"메뉴 데이터 로드 실패: {str(e)}")
@@ -195,37 +203,70 @@ def load_menu_data():
 
 def save_menu_data(data):
     try:
+        print("=== 메뉴 데이터 저장 시작 ===")
         print(f"저장할 메뉴 데이터: {data}")
+        
+        # 데이터 유효성 검사
+        if not isinstance(data, dict):
+            raise ValueError("메뉴 데이터가 올바른 형식이 아닙니다.")
+        
         with get_db() as db:
-            # 기존 데이터 삭제
-            db.execute('DELETE FROM menu')
-            print("기존 데이터 삭제 완료")
+            # 트랜잭션 시작
+            db.execute('BEGIN TRANSACTION')
             
-            # 새 데이터 저장 (순서 유지를 위해 order_index 사용)
-            for category, items in data.items():
-                for index, item in enumerate(items):
-                    try:
-                        print(f"저장할 항목: id={item['id']}, category={category}, name={item['name']}, price={item['price']}, image={item['image']}, temperature={item.get('temperature', '')}, order_index={index}")
-                        
-                        db.execute(
-                            'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), index)
-                        )
-                        print(f"메뉴 항목 저장 성공: {item['name']}")
-                    except Exception as e:
-                        print(f"메뉴 항목 저장 실패: {str(e)}")
-                        raise
+            try:
+                # 기존 데이터 백업
+                backup_data = {}
+                cursor = db.execute('SELECT * FROM menu')
+                for row in cursor:
+                    category = row['category']
+                    if category not in backup_data:
+                        backup_data[category] = []
+                    backup_data[category].append(dict(row))
+                
+                # 기존 데이터 삭제
+                db.execute('DELETE FROM menu')
+                print("기존 데이터 삭제 완료")
+                
+                # 새 데이터 저장 (순서 유지를 위해 order_index 사용)
+                for category, items in data.items():
+                    for index, item in enumerate(items):
+                        try:
+                            # 필수 필드 검증
+                            if not all(k in item for k in ['id', 'name', 'price', 'image']):
+                                raise ValueError(f"필수 필드가 누락된 메뉴 항목이 있습니다: {item}")
+                            
+                            order_index = item.get('order_index', index)
+                            print(f"저장할 항목: id={item['id']}, category={category}, name={item['name']}, price={item['price']}, image={item['image']}, temperature={item.get('temperature', '')}, order_index={order_index}")
+                            
+                            db.execute(
+                                'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), order_index)
+                            )
+                            print(f"메뉴 항목 저장 성공: {item['name']}")
+                        except Exception as e:
+                            print(f"메뉴 항목 저장 실패: {str(e)}")
+                            # 실패 시 백업 데이터로 복원
+                            db.execute('ROLLBACK')
+                            save_menu_data(backup_data)
+                            raise
+                
+                db.commit()
+                print("모든 메뉴 데이터 저장 완료")
+                
+                # 저장된 데이터 확인
+                cursor = db.execute('SELECT * FROM menu ORDER BY category, order_index')
+                saved_data = cursor.fetchall()
+                print(f"저장된 데이터 확인: {len(saved_data)}개 항목")
+                for row in saved_data:
+                    print(f"저장된 항목: {dict(row)}")
+                
+            except Exception as e:
+                print(f"데이터 저장 중 오류 발생: {str(e)}")
+                db.execute('ROLLBACK')
+                raise
             
-            db.commit()
-            print("모든 메뉴 데이터 저장 완료")
-            
-            # 저장된 데이터 확인
-            cursor = db.execute('SELECT * FROM menu ORDER BY category, order_index')
-            saved_data = cursor.fetchall()
-            print(f"저장된 데이터 확인: {len(saved_data)}개 항목")
-            for row in saved_data:
-                print(f"저장된 항목: {dict(row)}")
-            
+        print("=== 메뉴 데이터 저장 완료 ===")
     except Exception as e:
         print(f"메뉴 데이터 저장 실패: {str(e)}")
         import traceback
@@ -392,14 +433,27 @@ def add_menu():
         
         print(f"추가할 메뉴 정보: category={category}, name={name}, price={price}, temperature={temperature}")
         
+        # 필수 입력값 검증
         if not all([category, name, price]):
             return jsonify({'error': '카테고리, 이름, 가격은 필수 입력 항목입니다'}), 400
+        
+        # 가격 형식 검증
+        try:
+            price = str(int(price))  # 숫자로 변환 후 다시 문자열로
+        except ValueError:
+            return jsonify({'error': '가격은 숫자만 입력 가능합니다'}), 400
         
         # 이미지 저장 (이미지가 있는 경우에만)
         image_filename = "logo.png"
         if image_file and image_file.filename != '':
             try:
+                if not allowed_file(image_file.filename):
+                    return jsonify({'error': '허용되지 않는 이미지 형식입니다'}), 400
+                
                 image_filename = save_image(image_file)
+                if image_filename == "logo.png":
+                    return jsonify({'error': '이미지 저장에 실패했습니다'}), 500
+                
                 # Render 서버에 이미지 전송
                 if not os.environ.get('RENDER'):
                     with open(os.path.join(app.config['UPLOAD_FOLDER'], image_filename), 'rb') as img_file:
@@ -407,8 +461,12 @@ def add_menu():
                         response = requests.post(f"{RENDER_API_URL}/api/upload-image", files=files)
                         if response.status_code != 200:
                             print(f"Render 서버에 이미지 전송 실패: {response.status_code}")
+                            # 이미지 전송 실패 시 로컬 이미지 삭제
+                            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+                            return jsonify({'error': '이미지 업로드에 실패했습니다'}), 500
             except Exception as e:
                 print(f"이미지 저장 실패: {str(e)}")
+                return jsonify({'error': '이미지 저장 중 오류가 발생했습니다'}), 500
         
         # 새 메뉴 ID 생성
         new_id = generate_new_menu_id(menu_data)
@@ -417,9 +475,10 @@ def add_menu():
         menu = {
             "id": new_id,
             "name": name,
-            "price": str(price),
+            "price": price,
             "image": image_filename,
-            "temperature": temperature
+            "temperature": temperature,
+            "order_index": len(menu_data.get(category, []))  # 현재 카테고리의 마지막 순서로 추가
         }
         
         print(f"생성된 메뉴 항목: {menu}")
@@ -434,14 +493,25 @@ def add_menu():
         print(f"저장할 메뉴 데이터: {menu_data}")
         
         # 데이터 저장
-        if os.environ.get('RENDER'):
-            # Render 환경에서는 로컬 데이터베이스에만 저장
-            save_menu_data(menu_data)
-        else:
-            # 로컬 환경에서는 Render 서버와 로컬 모두에 저장
-            save_menu_to_render(menu_data)
-        
-        return jsonify({'message': '메뉴가 추가되었습니다'}), 201
+        try:
+            if os.environ.get('RENDER'):
+                # Render 환경에서는 로컬 데이터베이스에만 저장
+                save_menu_data(menu_data)
+            else:
+                # 로컬 환경에서는 Render 서버와 로컬 모두에 저장
+                if not save_menu_to_render(menu_data):
+                    raise Exception("Render 서버에 데이터 저장 실패")
+            
+            return jsonify({'message': '메뉴가 추가되었습니다', 'menu': menu}), 201
+        except Exception as e:
+            print(f"메뉴 저장 실패: {str(e)}")
+            # 이미지 파일 삭제
+            if image_filename != "logo.png":
+                try:
+                    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+                except:
+                    pass
+            return jsonify({'error': '메뉴 저장 중 오류가 발생했습니다'}), 500
     
     except Exception as e:
         print(f"메뉴 추가 중 오류 발생: {str(e)}")
@@ -661,6 +731,7 @@ def update_menu_order():
         if not new_menu_data:
             return jsonify({'error': '메뉴 데이터가 필요합니다.'}), 400
         
+        print("=== 메뉴 순서 업데이트 시작 ===")
         print(f"받은 메뉴 데이터: {new_menu_data}")
         
         # 기존 메뉴 데이터 로드
@@ -668,23 +739,48 @@ def update_menu_order():
         print(f"기존 메뉴 데이터: {menu_data}")
         
         # 새로운 메뉴 데이터로 업데이트
-        menu_data.clear()
-        menu_data.update(new_menu_data)
+        updated_menu_data = {}
+        
+        # 각 카테고리의 메뉴에 order_index 추가
+        for category, items in new_menu_data.items():
+            updated_menu_data[category] = []
+            for index, item in enumerate(items):
+                # 기존 메뉴 데이터에서 해당 항목 찾기
+                existing_item = None
+                if category in menu_data:
+                    for existing in menu_data[category]:
+                        if existing['id'] == item['id']:
+                            existing_item = existing
+                            break
+                
+                if existing_item:
+                    # 기존 항목의 데이터를 유지하면서 order_index만 업데이트
+                    item_with_order = existing_item.copy()
+                    item_with_order['order_index'] = index
+                    updated_menu_data[category].append(item_with_order)
+                else:
+                    # 새로운 항목인 경우
+                    item_with_order = item.copy()
+                    item_with_order['order_index'] = index
+                    updated_menu_data[category].append(item_with_order)
+        
+        print(f"순서가 추가된 메뉴 데이터: {updated_menu_data}")
         
         # 변경사항 저장
         if os.environ.get('RENDER'):
             # Render 환경에서는 로컬 데이터베이스에만 저장
-            save_menu_data(menu_data)
+            save_menu_data(updated_menu_data)
             print("Render 환경: 로컬 데이터베이스에 저장 완료")
         else:
             # 로컬 환경에서는 Render 서버와 로컬 모두에 저장
-            if save_menu_to_render(menu_data):
+            if save_menu_to_render(updated_menu_data):
                 print("로컬 환경: Render 서버와 로컬 데이터베이스에 저장 완료")
             else:
                 print("로컬 환경: 저장 실패")
                 return jsonify({'error': '메뉴 순서 저장에 실패했습니다.'}), 500
         
-        print(f"저장된 메뉴 데이터: {menu_data}")
+        print(f"저장된 메뉴 데이터: {updated_menu_data}")
+        print("=== 메뉴 순서 업데이트 완료 ===")
         return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'}), 200
         
     except Exception as e:
