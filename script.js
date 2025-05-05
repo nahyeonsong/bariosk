@@ -408,6 +408,13 @@ async function initializeApp() {
             console.error("캐시 비우기 실패:", cacheError);
         }
 
+        // 로컬 스토리지에서 저장된 카테고리 순서 불러오기
+        const savedCategories = loadCategoryOrderFromLocalStorage();
+        console.log(
+            "초기화 시 로컬 스토리지에서 불러온 카테고리 순서:",
+            savedCategories
+        );
+
         // 타임스탬프 생성 (캐시 방지)
         const timestamp = new Date().getTime();
 
@@ -428,11 +435,11 @@ async function initializeApp() {
             const data = await categoriesResponse.json();
 
             // 새로운 API 응답 형식 확인
-            const categories = Array.isArray(data)
+            const serverCategories = Array.isArray(data)
                 ? data
                 : data.categories || [];
 
-            console.log("서버에서 로드한 카테고리 목록:", categories);
+            console.log("서버에서 로드한 카테고리 목록:", serverCategories);
 
             // 응답에 추가 정보가 있으면 로깅
             if (data.timestamp) {
@@ -446,12 +453,34 @@ async function initializeApp() {
                 console.log(`응답 서버: ${data.server}`);
             }
 
-            // 로컬 스토리지에 저장
-            saveCategoryOrderToLocalStorage(categories);
+            // 최종 카테고리 결정
+            let finalCategories = [];
+
+            // 저장된 카테고리 순서가 있고, 서버 카테고리와 내용이 동일하면 저장된 순서 우선 사용
+            if (
+                savedCategories &&
+                savedCategories.length > 0 &&
+                serverCategories.length > 0 &&
+                new Set(savedCategories).size ===
+                    new Set(serverCategories).size &&
+                savedCategories.every((cat) => serverCategories.includes(cat))
+            ) {
+                console.log(
+                    "초기화: 로컬 스토리지의 카테고리 순서 우선 사용 (내용 동일)"
+                );
+                finalCategories = savedCategories;
+            } else {
+                // 서버 카테고리 사용 (새로운 카테고리가 추가되었거나 내용이 다른 경우)
+                console.log("초기화: 서버 카테고리 사용 (내용 다름)");
+                finalCategories = serverCategories;
+            }
+
+            // 로컬 스토리지 업데이트
+            saveCategoryOrderToLocalStorage(finalCategories);
 
             // UI 업데이트
-            updateCategorySelects(categories);
-            renderCategoryList(categories);
+            updateCategorySelects(finalCategories);
+            renderCategoryList(finalCategories);
 
             // 메뉴 데이터 로드
             console.log("서버에서 메뉴 데이터 로드");
@@ -474,7 +503,7 @@ async function initializeApp() {
                 );
 
                 // 메뉴 표시 업데이트
-                updateMenuDisplay(categories);
+                updateMenuDisplay(finalCategories);
             } else {
                 console.error("메뉴 데이터 로드 실패:", menuResponse.status);
                 // 실패 시 기존 방식으로 로드
@@ -515,6 +544,10 @@ async function loadCategories() {
         const url = `${API_BASE_URL}/api/categories?t=${timestamp}`;
         console.log(`API URL에서 카테고리 목록 로드 시도: ${url}`);
 
+        // 먼저 로컬 스토리지에서 저장된 카테고리 순서 불러오기
+        const savedCategories = loadCategoryOrderFromLocalStorage();
+        console.log("로컬 스토리지에서 불러온 카테고리 순서:", savedCategories);
+
         // 서버에서 카테고리 목록 로드 (캐시 방지 헤더 추가)
         const response = await apiRequest(
             url,
@@ -549,14 +582,24 @@ async function loadCategories() {
 
         console.log("서버에서 카테고리 목록 로드 응답:", serverCategories);
 
-        // 로컬 스토리지에서 저장된 카테고리 순서 불러오기
-        const savedCategories = loadCategoryOrderFromLocalStorage();
-        console.log("로컬 스토리지에서 불러온 카테고리 순서:", savedCategories);
-
         let finalCategories = [];
 
-        // 빈 배열이 반환된 경우
-        if (Array.isArray(serverCategories) && serverCategories.length === 0) {
+        // 저장된 카테고리 순서가 있고, 서버 카테고리와 내용이 동일하면 저장된 순서 우선 사용
+        if (
+            savedCategories &&
+            savedCategories.length > 0 &&
+            serverCategories.length > 0 &&
+            new Set(savedCategories).size === new Set(serverCategories).size &&
+            savedCategories.every((cat) => serverCategories.includes(cat))
+        ) {
+            console.log("로컬 스토리지의 카테고리 순서 우선 사용 (내용 동일)");
+            finalCategories = savedCategories;
+        }
+        // 서버 카테고리가 비어있거나 오류가 있는 경우
+        else if (
+            Array.isArray(serverCategories) &&
+            serverCategories.length === 0
+        ) {
             console.log("서버에서 빈 카테고리 목록이 반환됨");
 
             if (savedCategories && savedCategories.length > 0) {
@@ -573,11 +616,11 @@ async function loadCategories() {
                 console.log("빈 응답으로 기본 카테고리 사용");
             }
         } else {
-            // 서버 카테고리 항상 우선 사용
+            // 서버 카테고리 사용 (새로운 카테고리가 추가되었거나 내용이 다른 경우)
+            console.log("서버 카테고리 사용 (내용 다름)");
             finalCategories = serverCategories;
-            console.log("서버 카테고리 순서 우선 사용");
 
-            // 로컬 스토리지 업데이트
+            // 로컬 스토리지도 업데이트
             saveCategoryOrderToLocalStorage(finalCategories);
         }
 
@@ -1399,115 +1442,71 @@ async function handleCategoryDrop(e) {
             renderCategoryList(categories);
             updateCategorySelects(categories);
 
-            // 로컬 스토리지에 새 순서 저장
+            // 로컬 스토리지에 새 순서 저장 (우선 저장)
             saveCategoryOrderToLocalStorage(categories);
+
+            // 변경된 순서로 메뉴 표시 업데이트
+            updateMenuDisplay(categories);
 
             // 서버에 카테고리 순서 저장 (캐시 방지 타임스탬프 추가)
             const timestamp = new Date().getTime();
-            const response = await fetch(
-                `${API_BASE_URL}/api/categories/order?t=${timestamp}`,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Cache-Control": "no-cache, no-store, must-revalidate",
-                        Pragma: "no-cache",
-                        Expires: "0",
-                    },
-                    body: JSON.stringify({ categories }),
-                }
-            );
 
-            if (!response.ok) {
-                throw new Error(`카테고리 순서 저장 실패: ${response.status}`);
-            }
-
-            // 서버 응답 처리
             try {
-                const responseData = await response.json();
-                console.log("서버 응답 데이터:", responseData);
-
-                // categories 필드가 있는지 확인 (새 API 응답 형식)
-                if (responseData.categories) {
-                    console.log(
-                        "서버에서 반환된 카테고리 목록:",
-                        responseData.categories
-                    );
-
-                    // 서버 데이터로 UI 업데이트
-                    renderCategoryList(responseData.categories);
-                    updateCategorySelects(responseData.categories);
-                    updateMenuDisplay(responseData.categories);
-                    saveCategoryOrderToLocalStorage(responseData.categories);
-
-                    console.log("카테고리 순서 변경이 완료되었습니다.");
-                    return;
-                }
-            } catch (jsonError) {
-                console.warn("응답 JSON 파싱 중 오류 (계속 진행):", jsonError);
-                // JSON 파싱 오류가 있어도 계속 진행
-            }
-
-            console.log("서버에 카테고리 순서 저장 성공, 데이터 새로고침 진행");
-
-            // 카테고리 순서 변경 후 지연시간을 두고 서버 데이터 강제 새로고침
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            // 서버에서 새 데이터 로드 (캐시 무시)
-            console.log("서버에서 최신 카테고리 데이터 로드");
-            const refreshTimestamp = new Date().getTime();
-            const refreshResponse = await fetch(
-                `${API_BASE_URL}/api/categories?t=${refreshTimestamp}`,
-                {
-                    headers: {
-                        "Cache-Control": "no-cache, no-store, must-revalidate",
-                        Pragma: "no-cache",
-                        Expires: "0",
-                    },
-                }
-            );
-
-            if (refreshResponse.ok) {
-                const responseData = await refreshResponse.json();
-                console.log("서버 응답 데이터:", responseData);
-
-                // 새 API 응답 형식 처리: 배열 또는 { categories: [...], timestamp: ... }
-                let freshCategories;
-                if (Array.isArray(responseData)) {
-                    // 응답이 바로 배열인 경우 (이전 형식)
-                    freshCategories = responseData;
-                } else if (responseData && responseData.categories) {
-                    // 응답이 객체이고 categories 필드가 있는 경우 (새 형식)
-                    freshCategories = responseData.categories;
-                } else {
-                    // 형식이 예상과 다른 경우, 빈 배열 사용
-                    console.error("예상치 못한 응답 형식:", responseData);
-                    freshCategories = [];
-                }
-
-                console.log(
-                    "서버에서 새로 받은 카테고리 목록:",
-                    freshCategories
+                console.log("서버에 카테고리 순서 저장 시도");
+                const response = await fetch(
+                    `${API_BASE_URL}/api/categories/order?t=${timestamp}`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Cache-Control":
+                                "no-cache, no-store, must-revalidate",
+                            Pragma: "no-cache",
+                            Expires: "0",
+                        },
+                        body: JSON.stringify({ categories }),
+                    }
                 );
 
-                if (freshCategories.length > 0) {
-                    // 서버 데이터로 UI 업데이트
-                    renderCategoryList(freshCategories);
-                    updateCategorySelects(freshCategories);
-
-                    // 메뉴 표시 업데이트 (변경된 카테고리 순서 적용)
-                    updateMenuDisplay(freshCategories);
-
-                    // 로컬 스토리지도 서버 데이터로 업데이트
-                    saveCategoryOrderToLocalStorage(freshCategories);
-                } else {
-                    console.warn(
-                        "서버에서 빈 카테고리 목록이 반환됨, 로컬 목록 유지"
+                if (!response.ok) {
+                    throw new Error(
+                        `카테고리 순서 저장 실패: ${response.status}`
                     );
                 }
-            }
 
-            console.log("카테고리 순서 변경 및 서버 동기화 완료");
+                // 서버 응답 처리
+                try {
+                    const responseData = await response.json();
+                    console.log("서버 응답 데이터:", responseData);
+
+                    // categories 필드가 있는지 확인 (새 API 응답 형식)
+                    if (responseData.categories) {
+                        console.log(
+                            "서버에서 반환된 카테고리 목록:",
+                            responseData.categories
+                        );
+
+                        // 서버 데이터로 UI 업데이트 (단, 로컬 스토리지는 이미 업데이트했으므로 필요 없음)
+                        renderCategoryList(responseData.categories);
+                        updateCategorySelects(responseData.categories);
+                        updateMenuDisplay(responseData.categories);
+
+                        console.log("카테고리 순서 변경이 완료되었습니다.");
+                    }
+                } catch (jsonError) {
+                    console.warn("응답 JSON 파싱 중 오류 (무시됨):", jsonError);
+                    // JSON 파싱 오류가 있어도 UI는 이미 업데이트되었으므로 문제 없음
+                }
+
+                console.log("카테고리 순서 변경 및 서버 동기화 완료");
+            } catch (serverError) {
+                console.error("서버에 카테고리 순서 저장 실패:", serverError);
+                // 서버 저장에 실패해도 로컬 UI는 이미 업데이트되었고 로컬 스토리지도 저장되었으므로
+                // 사용자 경험을 위해 오류 메시지 표시만 하고 계속 진행
+                alert(
+                    `서버에 카테고리 순서를 저장하지 못했습니다. 다음에 다시 시도해 주세요: ${serverError.message}`
+                );
+            }
         } catch (error) {
             console.error("카테고리 순서 변경 중 오류:", error);
             alert(
@@ -1515,68 +1514,20 @@ async function handleCategoryDrop(e) {
                     error.message
             );
 
-            // 오류 발생 시 원래 목록으로 복원
+            // 오류 발생 시 로컬 스토리지의 이전 순서로 복원 시도
             try {
-                // 캐시를 무시하고 서버에서 새로운 데이터 가져오기
-                const timestamp = new Date().getTime();
-                const response = await fetch(
-                    `${API_BASE_URL}/api/categories?t=${timestamp}`,
-                    {
-                        headers: {
-                            "Cache-Control":
-                                "no-cache, no-store, must-revalidate",
-                            Pragma: "no-cache",
-                            Expires: "0",
-                        },
-                    }
-                );
-
-                if (response.ok) {
-                    const responseData = await response.json();
-                    console.log("서버 응답 데이터:", responseData);
-
-                    // 새 API 응답 형식 처리: 배열 또는 { categories: [...], timestamp: ... }
-                    let serverCategories;
-                    if (Array.isArray(responseData)) {
-                        // 응답이 바로 배열인 경우 (이전 형식)
-                        serverCategories = responseData;
-                    } else if (responseData && responseData.categories) {
-                        // 응답이 객체이고 categories 필드가 있는 경우 (새 형식)
-                        serverCategories = responseData.categories;
-                    } else {
-                        // 형식이 예상과 다른 경우, 빈 배열 사용
-                        console.error("예상치 못한 응답 형식:", responseData);
-                        serverCategories = [];
-                    }
-
-                    console.log(
-                        "서버에서 복원된 카테고리 목록:",
-                        serverCategories
-                    );
-
-                    if (serverCategories.length > 0) {
-                        renderCategoryList(serverCategories);
-                        updateCategorySelects(serverCategories);
-                        updateMenuDisplay(serverCategories);
-                        saveCategoryOrderToLocalStorage(serverCategories);
-                    } else {
-                        console.warn(
-                            "서버에서 빈 카테고리 목록이 반환됨, 로컬 목록 복원으로 대체"
-                        );
-                        await loadCategories();
-                    }
+                const savedCategories = loadCategoryOrderFromLocalStorage();
+                if (savedCategories && savedCategories.length > 0) {
+                    renderCategoryList(savedCategories);
+                    updateCategorySelects(savedCategories);
+                    updateMenuDisplay(savedCategories);
                 } else {
-                    console.error(
-                        "서버에서 카테고리 목록 불러오기 실패:",
-                        response.status
-                    );
+                    // 로컬 스토리지에 저장된 순서가 없으면 서버에서 다시 불러오기
                     await loadCategories();
                 }
             } catch (restoreError) {
-                console.error(
-                    "서버에서 카테고리 목록 복원 실패:",
-                    restoreError
-                );
+                console.error("카테고리 순서 복원 실패:", restoreError);
+                // 마지막 시도로 loadCategories 호출
                 await loadCategories();
             }
         }
