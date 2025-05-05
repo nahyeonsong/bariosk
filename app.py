@@ -24,10 +24,15 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # 기본 경로에 액세스 헤더 설정 추가
 @app.after_request
 def add_cors_headers(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Cache-Control,Pragma,Expires')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    # 이미 설정된 헤더인지 확인 후 추가
+    if 'Access-Control-Allow-Origin' not in response.headers:
+        response.headers.add('Access-Control-Allow-Origin', '*')
+    if 'Access-Control-Allow-Headers' not in response.headers:
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Cache-Control,Pragma,Expires')
+    if 'Access-Control-Allow-Methods' not in response.headers:
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    if 'Access-Control-Allow-Credentials' not in response.headers:
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
 # 데이터베이스 파일 경로 설정
@@ -892,10 +897,7 @@ def get_categories():
                 "server": "Render" if os.environ.get('RENDER') else "Local"
             })
             
-            # CORS 및 캐시 관련 헤더 추가
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            # 캐시 관련 헤더만 추가 (CORS 헤더는 after_request에서 추가됨)
             response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
             response.headers.add('Pragma', 'no-cache')
             response.headers.add('Expires', '0')
@@ -923,7 +925,7 @@ def get_categories():
                 "method": "fallback"
             })
             
-            response.headers.add('Access-Control-Allow-Origin', '*')
+            # 캐시 관련 헤더만 추가 (CORS 헤더는 after_request에서 추가됨)
             response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
             response.headers.add('Pragma', 'no-cache')
             response.headers.add('Expires', '0')
@@ -936,13 +938,13 @@ def get_categories():
         print("상세 오류:")
         print(traceback.format_exc())
         
-        # 오류 응답에도 캐시 방지 헤더 추가
+        # 오류 응답에도 캐시 방지 헤더만 추가
         response = jsonify({
             'error': str(e),
             'timestamp': int(time.time())
         })
         
-        response.headers.add('Access-Control-Allow-Origin', '*')
+        # 캐시 관련 헤더만 추가 (CORS 헤더는 after_request에서 추가됨)
         response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
         response.headers.add('Pragma', 'no-cache')
         response.headers.add('Expires', '0')
@@ -1311,7 +1313,15 @@ def update_menu_order():
                     print(f"Render 서버 동기화 중 오류: {str(e)}")
                     # Render 서버 동기화 실패는 무시하고 계속 진행
             
-            return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'}), 200
+            # 응답 준비 - CORS 헤더는 after_request에서 추가됨
+            response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': list(updated_menu_data.keys())})
+            
+            # 캐시 관련 헤더만 추가
+            response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
+            response.headers.add('Pragma', 'no-cache')
+            response.headers.add('Expires', '0')
+            
+            return response, 200
             
         except Exception as e:
             print(f"메뉴 데이터 저장 중 오류: {str(e)}")
@@ -1513,9 +1523,8 @@ def update_category_order():
             
             # CORS 헤더 추가
             response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': categories})
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            
+            # 캐시 관련 헤더만 추가
             response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
             response.headers.add('Pragma', 'no-cache')
             response.headers.add('Expires', '0')

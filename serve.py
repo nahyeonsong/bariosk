@@ -8,10 +8,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
 
+    # CORS 헤더를 추가하지 않음 - Flask의 CORS 처리 사용
     def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
         super().end_headers()
 
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
-    print(f"프론트엔드 서버가 http://localhost:{PORT} 에서 실행 중입니다.")
-    httpd.serve_forever() 
+handler = Handler
+httpd = socketserver.TCPServer(("", PORT), handler)
+print(f"서버가 http://localhost:{PORT}/ 에서 시작되었습니다.")
+httpd.serve_forever() 
