@@ -998,7 +998,7 @@ function showEditForm(menu, category) {
         if (confirm(`정말로 "${menu.name}" 메뉴를 삭제하시겠습니까?`)) {
             try {
                 const response = await fetch(
-                    `${API_BASE_URL}/api/menu/${category}/${menu.id}`,
+                    `${API_BASE_URL}/api/menu/${menu.id}`,
                     {
                         method: "DELETE",
                     }
@@ -1413,12 +1413,9 @@ async function cloneMenuItem(itemId) {
 async function deleteMenuItem(menuId, category) {
     if (confirm("정말로 이 메뉴를 삭제하시겠습니까?")) {
         try {
-            const response = await fetch(
-                `${API_BASE_URL}/api/menu/${category}/${menuId}`,
-                {
-                    method: "DELETE",
-                }
-            );
+            const response = await fetch(`${API_BASE_URL}/api/menu/${menuId}`, {
+                method: "DELETE",
+            });
 
             if (!response.ok) {
                 // 응답이 JSON이 아닐 수 있으므로 안전하게 처리
