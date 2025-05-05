@@ -87,6 +87,8 @@ function loadCategoryOrderFromLocalStorage() {
 
 // API 요청 함수 (타임아웃 처리 및 재시도 로직 추가)
 async function apiRequest(url, options = {}, retries = 2) {
+    const startTime = performance.now();
+
     try {
         // AbortController를 사용하여 타임아웃 설정
         const controller = new AbortController();
@@ -105,6 +107,9 @@ async function apiRequest(url, options = {}, retries = 2) {
 
         clearTimeout(timeoutId);
 
+        const elapsed = performance.now() - startTime;
+        console.log(`API 응답: ${url} (${elapsed.toFixed(0)}ms)`);
+
         if (!response.ok) {
             let errorMessage;
             try {
@@ -119,8 +124,10 @@ async function apiRequest(url, options = {}, retries = 2) {
 
         return response;
     } catch (error) {
+        const elapsed = performance.now() - startTime;
+
         if (error.name === "AbortError") {
-            console.error("요청 시간 초과:", url);
+            console.error(`요청 시간 초과: ${url} (${elapsed.toFixed(0)}ms)`);
             if (retries > 0) {
                 console.log(
                     `${url} 재시도 중... (남은 재시도: ${retries - 1})`
@@ -391,70 +398,120 @@ document.addEventListener("DOMContentLoaded", () => {
 async function initializeApp() {
     try {
         console.log("앱 초기화 시작");
+        const startTime = performance.now(); // 성능 측정 시작
 
-        // 캐시 비우기 시도
+        // 로컬 스토리지에서 저장된 카테고리와 메뉴 데이터 먼저 확인
         try {
-            if ("caches" in window) {
-                console.log("브라우저 캐시 비우기 시도");
-                const cacheNames = await window.caches.keys();
-                await Promise.all(
-                    cacheNames.map((cacheName) =>
-                        window.caches.delete(cacheName)
-                    )
-                );
-                console.log("브라우저 캐시 비우기 완료");
+            // 로컬 스토리지에서 저장된 카테고리 순서 불러오기
+            const savedCategories = loadCategoryOrderFromLocalStorage();
+            console.log(
+                "초기화 시 로컬 스토리지에서 불러온 카테고리 순서:",
+                savedCategories
+            );
+
+            // 로컬 스토리지에서 메뉴 데이터 불러오기 (캐시 데이터)
+            const cachedMenuData = localStorage.getItem("bariosk_menu_data");
+            if (cachedMenuData) {
+                try {
+                    const parsedMenuData = JSON.parse(cachedMenuData);
+                    const cacheTime = localStorage.getItem(
+                        "bariosk_menu_data_time"
+                    );
+                    const cacheAge = cacheTime
+                        ? (Date.now() - parseInt(cacheTime)) / 1000
+                        : 0;
+
+                    console.log(
+                        "로컬 스토리지에서 메뉴 데이터 캐시 발견 (캐시 나이:",
+                        cacheAge.toFixed(0),
+                        "초)"
+                    );
+
+                    // 캐시가 1시간 이내인 경우 사용 (개발 중에는 짧게, 프로덕션에서는 길게 설정 가능)
+                    if (cacheAge < 3600) {
+                        console.log("캐시된 메뉴 데이터 사용");
+                        menuData = parsedMenuData;
+
+                        // UI 초기 업데이트 (빠른 초기 로딩을 위해)
+                        if (savedCategories && savedCategories.length > 0) {
+                            updateCategorySelects(savedCategories);
+                            renderCategoryList(savedCategories);
+                            updateMenuDisplay(savedCategories);
+
+                            // 백그라운드에서 서버 데이터 불러오기 (UI는 이미 표시됨)
+                            setTimeout(() => loadServerData(false), 500);
+
+                            console.log(
+                                "캐시 데이터로 초기 UI 구성 완료:",
+                                performance.now() - startTime,
+                                "ms"
+                            );
+                            return; // 여기서 종료, 백그라운드 로딩은 계속됨
+                        }
+                    } else {
+                        console.log(
+                            "캐시가 오래되어 서버에서 새 데이터 로드 필요"
+                        );
+                    }
+                } catch (e) {
+                    console.error("캐시된 메뉴 데이터 파싱 오류:", e);
+                }
             }
         } catch (cacheError) {
-            console.error("캐시 비우기 실패:", cacheError);
+            console.error("로컬 캐시 확인 중 오류:", cacheError);
         }
 
-        // 로컬 스토리지에서 저장된 카테고리 순서 불러오기
-        const savedCategories = loadCategoryOrderFromLocalStorage();
-        console.log(
-            "초기화 시 로컬 스토리지에서 불러온 카테고리 순서:",
-            savedCategories
-        );
+        // 캐시 데이터가 유효하지 않거나 없으면 서버에서 데이터 로드
+        await loadServerData(true);
+        console.log("앱 초기화 완료:", performance.now() - startTime, "ms");
+    } catch (error) {
+        console.error("앱 초기화 중 오류:", error);
+        // 오류 발생 시 기존 로드 메서드로 복구 시도
+        try {
+            await loadCategories();
+            await loadMenuData();
+            updateMenuDisplay();
+        } catch (fallbackError) {
+            console.error("복구 시도 실패:", fallbackError);
+        }
+    }
+}
 
-        // 타임스탬프 생성 (캐시 방지)
-        const timestamp = new Date().getTime();
+// 서버에서 데이터 로드 함수 (초기화 시와 백그라운드 업데이트에 모두 사용)
+async function loadServerData(isInitialLoad = true) {
+    // 타임스탬프 생성 (캐시 방지)
+    const timestamp = new Date().getTime();
 
-        // 카테고리 목록 직접 로드 (캐시 방지)
-        console.log("서버에서 카테고리 목록 직접 로드");
-        const categoriesResponse = await fetch(
-            `${API_BASE_URL}/api/categories?t=${timestamp}`,
-            {
+    try {
+        // 카테고리 목록과 메뉴 데이터를 병렬로 요청 (시간 단축)
+        const [categoriesResponse, menuResponse] = await Promise.all([
+            fetch(`${API_BASE_URL}/api/categories?t=${timestamp}`, {
                 headers: {
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     Pragma: "no-cache",
                     Expires: "0",
                 },
-            }
-        );
+            }),
+            fetch(`${API_BASE_URL}/api/menu?t=${timestamp}`, {
+                headers: {
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    Pragma: "no-cache",
+                    Expires: "0",
+                },
+            }),
+        ]);
 
+        // 카테고리 응답 처리
+        let finalCategories = [];
         if (categoriesResponse.ok) {
             const data = await categoriesResponse.json();
-
-            // 새로운 API 응답 형식 확인
             const serverCategories = Array.isArray(data)
                 ? data
                 : data.categories || [];
-
             console.log("서버에서 로드한 카테고리 목록:", serverCategories);
 
-            // 응답에 추가 정보가 있으면 로깅
-            if (data.timestamp) {
-                console.log(
-                    `서버 응답 시간: ${new Date(
-                        data.timestamp * 1000
-                    ).toLocaleString()}`
-                );
-            }
-            if (data.server) {
-                console.log(`응답 서버: ${data.server}`);
-            }
-
-            // 최종 카테고리 결정
-            let finalCategories = [];
+            // 로컬 스토리지에서 저장된 카테고리 순서 불러오기
+            const savedCategories = loadCategoryOrderFromLocalStorage();
 
             // 저장된 카테고리 순서가 있고, 서버 카테고리와 내용이 동일하면 저장된 순서 우선 사용
             if (
@@ -466,72 +523,71 @@ async function initializeApp() {
                 savedCategories.every((cat) => serverCategories.includes(cat))
             ) {
                 console.log(
-                    "초기화: 로컬 스토리지의 카테고리 순서 우선 사용 (내용 동일)"
+                    "로컬 스토리지의 카테고리 순서 우선 사용 (내용 동일)"
                 );
                 finalCategories = savedCategories;
             } else {
                 // 서버 카테고리 사용 (새로운 카테고리가 추가되었거나 내용이 다른 경우)
-                console.log("초기화: 서버 카테고리 사용 (내용 다름)");
+                console.log("서버 카테고리 사용 (내용 다름)");
                 finalCategories = serverCategories;
-            }
-
-            // 로컬 스토리지 업데이트
-            saveCategoryOrderToLocalStorage(finalCategories);
-
-            // UI 업데이트
-            updateCategorySelects(finalCategories);
-            renderCategoryList(finalCategories);
-
-            // 메뉴 데이터 로드
-            console.log("서버에서 메뉴 데이터 로드");
-            const menuResponse = await fetch(
-                `${API_BASE_URL}/api/menu?t=${timestamp}`,
-                {
-                    headers: {
-                        "Cache-Control": "no-cache, no-store, must-revalidate",
-                        Pragma: "no-cache",
-                        Expires: "0",
-                    },
-                }
-            );
-
-            if (menuResponse.ok) {
-                menuData = await menuResponse.json();
-                console.log(
-                    "서버에서 로드한 메뉴 데이터:",
-                    Object.keys(menuData)
-                );
-
-                // 메뉴 표시 업데이트
-                updateMenuDisplay(finalCategories);
-            } else {
-                console.error("메뉴 데이터 로드 실패:", menuResponse.status);
-                // 실패 시 기존 방식으로 로드
-                await loadMenuData();
-                await loadCategoriesAndUpdateDisplay();
+                // 로컬 스토리지도 업데이트
+                saveCategoryOrderToLocalStorage(finalCategories);
             }
         } else {
             console.error(
                 "카테고리 목록 로드 실패:",
                 categoriesResponse.status
             );
-            // 실패 시 기존 방식으로 로드
-            await loadCategories();
-            await loadMenuData();
-            await loadCategoriesAndUpdateDisplay();
+            // 실패 시 로컬 스토리지에서 복구 시도
+            const savedCategories = loadCategoryOrderFromLocalStorage();
+            if (savedCategories && savedCategories.length > 0) {
+                finalCategories = savedCategories;
+            } else {
+                finalCategories = Object.keys(menuData);
+            }
         }
 
-        console.log("앱 초기화 완료");
-    } catch (error) {
-        console.error("앱 초기화 중 오류:", error);
-        // 오류 발생 시 기존 로드 메서드로 복구 시도
-        try {
-            await loadCategories();
-            await loadMenuData();
-            updateMenuDisplay();
-        } catch (fallbackError) {
-            console.error("복구 시도 실패:", fallbackError);
+        // 메뉴 데이터 응답 처리
+        if (menuResponse.ok) {
+            const newMenuData = await menuResponse.json();
+            console.log(
+                "서버에서 로드한 메뉴 데이터:",
+                Object.keys(newMenuData)
+            );
+
+            // 메뉴 데이터 업데이트
+            menuData = newMenuData;
+
+            // 로컬 스토리지에 메뉴 데이터 캐싱
+            try {
+                localStorage.setItem(
+                    "bariosk_menu_data",
+                    JSON.stringify(menuData)
+                );
+                localStorage.setItem(
+                    "bariosk_menu_data_time",
+                    Date.now().toString()
+                );
+                console.log("메뉴 데이터를 로컬 스토리지에 캐시함");
+            } catch (storageError) {
+                console.warn("메뉴 데이터 캐시 저장 실패:", storageError);
+            }
+        } else {
+            console.error("메뉴 데이터 로드 실패:", menuResponse.status);
         }
+
+        // UI 업데이트 (초기 로드 시에만)
+        if (isInitialLoad) {
+            updateCategorySelects(finalCategories);
+            renderCategoryList(finalCategories);
+            updateMenuDisplay(finalCategories);
+        } else {
+            // 백그라운드 업데이트 시에는 조용히 데이터만 업데이트
+            console.log("백그라운드에서 데이터 업데이트 완료");
+        }
+    } catch (error) {
+        console.error("서버 데이터 로드 중 오류:", error);
+        throw error; // 상위 함수에서 처리하도록 오류 전파
     }
 }
 
@@ -857,35 +913,45 @@ function getTemperatureText(temperature) {
 async function loadMenuData() {
     try {
         console.log("메뉴 데이터 로딩 시작");
-        const url = `${API_BASE_URL}/api/menu`;
-        console.log(`API URL에서 메뉴 데이터 로드 시도: ${url}`);
+        const startTime = performance.now();
 
-        const response = await apiRequest(url);
-        const data = await response.json();
-        console.log("메뉴 데이터 로드 응답:", Object.keys(data));
+        // 로컬 스토리지에서 캐시된 메뉴 데이터 확인
+        const cachedMenuData = localStorage.getItem("bariosk_menu_data");
+        const cacheTime = localStorage.getItem("bariosk_menu_data_time");
 
-        // 빈 객체 또는 오류 응답인지 확인
-        if (data && typeof data === "object" && Object.keys(data).length > 0) {
-            menuData = data;
-            console.log("메뉴 데이터 설정 완료");
-        } else {
-            console.log("서버에서 빈 메뉴 데이터 또는 오류 응답이 반환됨");
-            // 기존 데이터가 있으면 유지
-            if (Object.keys(menuData).length === 0) {
-                // 완전히 빈 데이터인 경우에만 기본 데이터 추가
-                console.log("기본 메뉴 데이터 설정");
-                const categories = await loadCategories();
-                for (const category of categories) {
-                    if (!menuData[category]) {
-                        menuData[category] = [];
-                    }
+        if (cachedMenuData && cacheTime) {
+            const cacheAge = (Date.now() - parseInt(cacheTime)) / 1000;
+            console.log(
+                "메뉴 데이터 캐시 발견 (나이:",
+                cacheAge.toFixed(0),
+                "초)"
+            );
+
+            // 캐시가 1시간 이내이면 사용
+            if (cacheAge < 3600) {
+                console.log("캐시된 메뉴 데이터 사용");
+                menuData = JSON.parse(cachedMenuData);
+
+                // 백그라운드에서 최신 데이터 로드 (UI는 이미 표시됨)
+                setTimeout(() => refreshMenuData(), 1000);
+
+                // 로컬 스토리지의 카테고리 순서에 맞게 UI 업데이트
+                const savedCategories = loadCategoryOrderFromLocalStorage();
+                if (savedCategories && savedCategories.length > 0) {
+                    loadCategoriesAndUpdateDisplay();
                 }
+
+                console.log(
+                    `캐시된 메뉴 데이터 로드 완료: ${(
+                        performance.now() - startTime
+                    ).toFixed(0)}ms`
+                );
+                return menuData;
             }
         }
 
-        // 카테고리 로드 후 메뉴 업데이트
-        loadCategoriesAndUpdateDisplay();
-        return menuData;
+        // 캐시가 없거나 오래된 경우 서버에서 로드
+        return await refreshMenuData();
     } catch (error) {
         console.error("메뉴 데이터 로드 중 오류:", error);
 
@@ -910,6 +976,55 @@ async function loadMenuData() {
         }
 
         return menuData;
+    }
+}
+
+// 서버에서 최신 메뉴 데이터 새로고침
+async function refreshMenuData() {
+    const startTime = performance.now();
+    try {
+        const url = `${API_BASE_URL}/api/menu?t=${Date.now()}`;
+        console.log(`API URL에서 최신 메뉴 데이터 로드 시도: ${url}`);
+
+        const response = await apiRequest(url);
+        const data = await response.json();
+
+        console.log(
+            `최신 메뉴 데이터 로드 완료: ${(
+                performance.now() - startTime
+            ).toFixed(0)}ms`
+        );
+        console.log("새로운 메뉴 데이터:", Object.keys(data));
+
+        // 빈 객체 또는 오류 응답인지 확인
+        if (data && typeof data === "object" && Object.keys(data).length > 0) {
+            menuData = data;
+            console.log("메뉴 데이터 설정 완료");
+
+            // 메뉴 데이터 캐시 저장
+            try {
+                localStorage.setItem(
+                    "bariosk_menu_data",
+                    JSON.stringify(menuData)
+                );
+                localStorage.setItem(
+                    "bariosk_menu_data_time",
+                    Date.now().toString()
+                );
+                console.log("메뉴 데이터를 로컬 스토리지에 캐시함");
+            } catch (storageError) {
+                console.warn("메뉴 데이터 캐시 저장 실패:", storageError);
+            }
+        } else {
+            console.log("서버에서 빈 메뉴 데이터 또는 오류 응답이 반환됨");
+        }
+
+        // 카테고리 로드 후 메뉴 업데이트
+        loadCategoriesAndUpdateDisplay();
+        return menuData;
+    } catch (error) {
+        console.error("최신 메뉴 데이터 로드 실패:", error);
+        throw error;
     }
 }
 
@@ -1002,61 +1117,12 @@ function updateMenuDisplay(sortedCategories = null) {
 
             // 각 메뉴 아이템 추가
             menuData[category].forEach((menu) => {
-                const menuItem = document.createElement("div");
-                menuItem.className = "menu-item";
-                menuItem.draggable = isAdminMode;
-                menuItem.dataset.id = menu.id;
-                menuItem.dataset.category = category;
-
-                const adminControls = isAdminMode
-                    ? `
-                    <div class="admin-controls">
-                        <button class="edit-btn" data-id="${
-                            menu.id
-                        }" data-category="${category}">수정</button>
-                        <button class="clone-btn" onclick="cloneMenuItem(${JSON.stringify(
-                            menu
-                        ).replace(
-                            /"/g,
-                            "&quot;"
-                        )}, '${category}')">복제</button>
-                        <button class="delete-btn" onclick="deleteMenuItem(${
-                            menu.id
-                        }, '${category}')">삭제</button>
-                    </div>
-                    `
-                    : "";
-
-                const addToCartButton = !isAdminMode
-                    ? `<button class="add-to-cart" onclick="addToCart(${menu.id})">담기</button>`
-                    : "";
-
-                menuItem.innerHTML = `
-                    <img src="${API_BASE_URL}/static/images/${
-                    menu.image || "logo.png"
-                }" alt="${
-                    menu.name
-                }" onerror="this.src='${API_BASE_URL}/static/images/logo.png'">
-                    <div class="menu-info">
-                        <h3>${menu.name}</h3>
-                        <p class="price">${menu.price.toLocaleString()}원</p>
-                        <p class="temperature">${getTemperatureText(
-                            menu.temperature
-                        )}</p>
-                    </div>
-                    ${adminControls}
-                    ${addToCartButton}
-                `;
-
-                if (isAdminMode) {
-                    menuItem.addEventListener("dragstart", handleDragStart);
-                    menuItem.addEventListener("dragover", handleDragOver);
-                    menuItem.addEventListener("dragenter", handleDragEnter);
-                    menuItem.addEventListener("dragleave", handleDragLeave);
-                    menuItem.addEventListener("drop", handleDrop);
-                    menuItem.addEventListener("dragend", handleDragEnd);
+                // 메뉴 항목에 카테고리 정보 추가 (필요한 경우)
+                if (!menu.category) {
+                    menu.category = category;
                 }
 
+                const menuItem = createMenuItem(menu);
                 menuGrid.appendChild(menuItem);
             });
 
@@ -1102,13 +1168,8 @@ function updateMenuDisplay(sortedCategories = null) {
             });
         });
     } else {
-        // 장바구니 추가 버튼 클릭 이벤트
-        document.querySelectorAll(".add-to-cart").forEach((button) => {
-            button.addEventListener("click", () => {
-                const menuId = parseInt(button.getAttribute("data-id"));
-                addToCart(menuId);
-            });
-        });
+        // 장바구니 추가 버튼 클릭 이벤트를 위한 이벤트 리스너 추가
+        addMenuEventListeners();
     }
 }
 
@@ -1353,4 +1414,324 @@ async function handleDrop() {
             alert("메뉴 순서 저장 중 오류가 발생했습니다: " + error.message);
         }
     }
+}
+
+// 메뉴 아이템 생성
+function createMenuItem(item) {
+    const menuItem = document.createElement("div");
+    menuItem.className = "menu-item";
+    menuItem.draggable = isAdminMode;
+    menuItem.dataset.id = item.id;
+    menuItem.dataset.category = item.category;
+
+    const adminControls = isAdminMode
+        ? `
+        <div class="admin-controls">
+            <button class="edit-btn" data-id="${item.id}" data-category="${
+              item.category
+          }">수정</button>
+            <button class="clone-btn" onclick="cloneMenuItem(${JSON.stringify(
+                item
+            ).replace(/"/g, "&quot;")}, '${item.category}')">복제</button>
+            <button class="delete-btn" onclick="deleteMenuItem(${item.id}, '${
+              item.category
+          }')">삭제</button>
+        </div>
+        `
+        : "";
+
+    const addToCartButton = !isAdminMode
+        ? `<button class="add-to-cart" onclick="addToCart(${item.id})">담기</button>`
+        : "";
+
+    menuItem.innerHTML = `
+        <img src="${API_BASE_URL}/static/images/${
+        item.image || "logo.png"
+    }" alt="${
+        item.name
+    }" onerror="this.src='${API_BASE_URL}/static/images/logo.png'">
+        <div class="menu-info">
+            <h3>${item.name}</h3>
+            <p class="price">${item.price.toLocaleString()}원</p>
+            <p class="temperature">${getTemperatureText(item.temperature)}</p>
+        </div>
+        ${adminControls}
+        ${addToCartButton}
+    `;
+
+    if (isAdminMode) {
+        menuItem.addEventListener("dragstart", handleDragStart);
+        menuItem.addEventListener("dragover", handleDragOver);
+        menuItem.addEventListener("dragenter", handleDragEnter);
+        menuItem.addEventListener("dragleave", handleDragLeave);
+        menuItem.addEventListener("drop", handleDrop);
+        menuItem.addEventListener("dragend", handleDragEnd);
+    }
+
+    return menuItem;
+}
+
+// 수정 폼 표시
+function showEditForm(menu, category) {
+    const editForm = document.getElementById("editMenuForm");
+    const editMenuId = document.getElementById("editMenuId");
+    const editCategory = document.getElementById("editCategory");
+    const editName = document.getElementById("editName");
+    const editTemperature = document.getElementById("editTemperature");
+    const editPrice = document.getElementById("editPrice");
+    const editImage = document.getElementById("editImage");
+    const deleteMenuBtn = document.getElementById("deleteMenu");
+
+    editMenuId.value = menu.id;
+    editCategory.value = category;
+    editName.value = menu.name;
+    editTemperature.value = menu.temperature || "H";
+    editPrice.value = menu.price;
+    editImage.value = ""; // 이미지 입력 필드 초기화
+
+    // 삭제 버튼에 이벤트 리스너 추가
+    deleteMenuBtn.onclick = async () => {
+        if (confirm(`정말로 "${menu.name}" 메뉴를 삭제하시겠습니까?`)) {
+            try {
+                const response = await fetch(
+                    `${API_BASE_URL}/api/menu/${menu.id}`,
+                    {
+                        method: "DELETE",
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error("메뉴 삭제 실패");
+                }
+
+                editForm.style.display = "none";
+                loadMenuData();
+                alert("메뉴가 삭제되었습니다.");
+            } catch (error) {
+                console.error("Error:", error);
+                alert("메뉴 삭제 중 오류가 발생했습니다: " + error.message);
+            }
+        }
+    };
+
+    editForm.style.display = "block";
+    editForm.scrollIntoView({ behavior: "smooth" });
+}
+
+// 장바구니에 메뉴 추가
+function addToCart(menuId) {
+    const menu = findMenuById(menuId);
+    if (!menu) {
+        console.error("Menu not found:", menuId);
+        return;
+    }
+
+    console.log("Adding to cart:", menu); // 디버깅용
+
+    const existingItem = cart.find((item) => item.id === menuId);
+    if (existingItem) {
+        existingItem.quantity++;
+    } else {
+        cart.push({
+            id: menu.id,
+            name: menu.name,
+            price: menu.price,
+            quantity: 1,
+            temperature: menu.temperature || "",
+        });
+    }
+
+    updateCart();
+}
+
+// 장바구니에서 메뉴 제거
+function removeFromCart(menuId) {
+    cart = cart.filter((item) => item.id !== menuId);
+    updateCart();
+}
+
+// 장바구니 수량 업데이트
+function updateQuantity(menuId, change) {
+    const item = cart.find((item) => item.id === menuId);
+    if (!item) return;
+
+    item.quantity += change;
+    if (item.quantity <= 0) {
+        removeFromCart(menuId);
+    } else {
+        updateCart();
+    }
+}
+
+// 장바구니 UI 업데이트
+function updateCart() {
+    const cartItems = document.getElementById("cartItems");
+    const totalAmount = document.getElementById("totalAmount");
+    const checkoutBtn = document.getElementById("checkoutBtn");
+
+    cartItems.innerHTML = "";
+    let total = 0;
+
+    cart.forEach((item) => {
+        const itemTotal = item.price * item.quantity;
+        total += itemTotal;
+
+        const cartItem = document.createElement("div");
+        cartItem.className = "cart-item";
+        cartItem.innerHTML = `
+            <div class="cart-item-info">
+                <div>${getTemperatureText(item.temperature)}${
+            getTemperatureText(item.temperature) ? " " : ""
+        }${item.name}</div>
+                <div>${item.price.toLocaleString()}원</div>
+            </div>
+            <div class="cart-item-quantity">
+                <button class="quantity-btn" onclick="updateQuantity(${
+                    item.id
+                }, -1)">-</button>
+                <span>${item.quantity}</span>
+                <button class="quantity-btn" onclick="updateQuantity(${
+                    item.id
+                }, 1)">+</button>
+            </div>
+        `;
+        cartItems.appendChild(cartItem);
+    });
+
+    totalAmount.textContent = `${total.toLocaleString()}원`;
+    checkoutBtn.disabled = cart.length === 0;
+}
+
+// 주문서 생성 및 다운로드
+async function generateReceipt() {
+    const receipt = document.createElement("div");
+    receipt.className = "receipt";
+    receipt.style.position = "absolute";
+    receipt.style.left = "-9999px";
+    document.body.appendChild(receipt);
+
+    receipt.innerHTML = `
+        <div class="receipt-header">
+            <h2>주문서</h2>
+            <p>${new Date().toLocaleString()}</p>
+        </div>
+        <div class="receipt-items">
+            ${cart
+                .map((item) => {
+                    const temperatureText = getTemperatureText(
+                        item.temperature
+                    );
+                    return `
+                        <div class="receipt-item">
+                            <span>${temperatureText}${
+                        temperatureText ? " " : ""
+                    }${item.name} x ${item.quantity}</span>
+                            <span>${(
+                                item.price * item.quantity
+                            ).toLocaleString()}원</span>
+                        </div>
+                    `;
+                })
+                .join("")}
+        </div>
+        <div class="receipt-total">
+            <span>총 금액</span>
+            <span>${cart
+                .reduce((total, item) => total + item.price * item.quantity, 0)
+                .toLocaleString()}원</span>
+        </div>
+        <div class="receipt-footer">
+            <p>감사합니다. 또 방문해 주세요!</p>
+        </div>
+    `;
+
+    try {
+        const canvas = await html2canvas(receipt, {
+            scale: 2,
+            useCORS: true,
+            logging: true,
+            allowTaint: true,
+        });
+        const link = document.createElement("a");
+        link.download = `주문서_${new Date().toISOString().slice(0, 10)}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    } catch (error) {
+        console.error("Error generating receipt:", error);
+        alert("주문서 생성 중 오류가 발생했습니다.");
+    } finally {
+        document.body.removeChild(receipt);
+    }
+}
+
+// 결제 버튼 이벤트 리스너
+document.getElementById("checkoutBtn").addEventListener("click", async () => {
+    if (cart.length > 0) {
+        if (confirm("주문서를 출력하시겠습니까?")) {
+            try {
+                await generateReceipt();
+                cart = [];
+                updateCart();
+                alert("주문서 출력이 완료되었습니다. 주문서가 다운로드됩니다.");
+            } catch (error) {
+                console.error("Error during checkout:", error);
+                alert("주문서처리 중 오류가 발생했습니다.");
+            }
+        }
+    }
+});
+
+// 메뉴 아이템에 장바구니 추가 버튼 이벤트 리스너 추가
+function addMenuEventListeners() {
+    document.querySelectorAll(".menu-item").forEach((item) => {
+        const addToCartBtn = item.querySelector(".add-to-cart");
+        if (addToCartBtn) {
+            addToCartBtn.addEventListener("click", () => {
+                const menuId = parseInt(item.dataset.id);
+                addToCart(menuId);
+            });
+        }
+    });
+}
+
+// 메뉴 ID로 메뉴 찾기
+function findMenuById(menuId) {
+    for (const category in menuData) {
+        const menu = menuData[category].find(
+            (item) => item.id === parseInt(menuId)
+        );
+        if (menu) {
+            console.log("Found menu:", menu); // 디버깅용
+            return menu;
+        }
+    }
+    console.error("Menu not found in any category:", menuId); // 디버깅용
+    return null;
+}
+
+// 드래그 앤 드롭 이벤트 핸들러
+function handleDragStart(e) {
+    draggedItem = this;
+    dragStartIndex = Array.from(this.parentNode.children).indexOf(this);
+    this.classList.add("dragging");
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+}
+
+function handleDragEnter(e) {
+    e.preventDefault();
+    this.classList.add("drag-over");
+}
+
+function handleDragLeave() {
+    this.classList.remove("drag-over");
+}
+
+function handleDragEnd() {
+    this.classList.remove("dragging");
+    document.querySelectorAll(".menu-item").forEach((item) => {
+        item.classList.remove("drag-over");
+    });
 }
