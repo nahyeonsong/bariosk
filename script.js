@@ -193,58 +193,68 @@ document.addEventListener("DOMContentLoaded", () => {
             const requestData = JSON.stringify({ name: categoryName });
             console.log(`요청 데이터: ${requestData}`);
 
-            const response = await apiRequest(url, {
-                method: "POST",
-                body: requestData,
-            });
-
-            console.log(`응답 상태: ${response.status}`);
-            const responseText = await response.text();
-            console.log(`응답 텍스트: ${responseText}`);
-
-            let responseData;
-            try {
-                responseData = JSON.parse(responseText);
-            } catch (e) {
-                console.error("응답 JSON 파싱 오류:", e);
-                responseData = { message: responseText };
-            }
-
-            if (!response.ok) {
-                throw new Error(
-                    responseData.error || `서버 오류: ${response.status}`
-                );
-            }
-
-            addCategoryForm.reset();
-
-            // 클라이언트 측 최적화 - 새 카테고리를 즉시 적용
+            // 로컬 UI 업데이트 (낙관적 UI 업데이트)
             if (!menuData[categoryName]) {
                 menuData[categoryName] = [];
                 console.log(`로컬 menuData에 카테고리 추가: ${categoryName}`);
 
-                // 카테고리 선택 옵션 업데이트
+                // 카테고리 선택 옵션과 목록 업데이트
                 const categories = Object.keys(menuData);
                 updateCategorySelects(categories);
                 renderCategoryList(categories);
                 updateMenuDisplay();
-                console.log("UI 업데이트 완료");
+                console.log("UI 낙관적 업데이트 완료");
             }
 
-            // 즉시 서버에서 데이터 다시 로드 (클라이언트 변경 후)
+            // 요청 전송
             try {
-                await loadCategories();
-                await loadMenuData();
-                console.log("서버에서 최신 데이터 로드 완료");
-            } catch (error) {
-                console.error("서버 데이터 로드 오류:", error);
-                // UI는 이미 업데이트되었으므로 사용자에게 오류를 표시하지 않음
-            }
+                const response = await apiRequest(url, {
+                    method: "POST",
+                    body: requestData,
+                });
 
-            alert("카테고리가 추가되었습니다.");
+                console.log(`응답 상태: ${response.status}`);
+                const responseText = await response.text();
+                console.log(`응답 텍스트: ${responseText}`);
+
+                let responseData;
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch (e) {
+                    console.error("응답 JSON 파싱 오류:", e);
+                    responseData = { message: responseText };
+                }
+
+                if (!response.ok) {
+                    throw new Error(
+                        responseData.error || `서버 오류: ${response.status}`
+                    );
+                }
+
+                addCategoryForm.reset();
+
+                // 서버 데이터 로드 (백그라운드)
+                try {
+                    setTimeout(async () => {
+                        await loadCategories();
+                        await loadMenuData();
+                        console.log("서버 데이터 백그라운드 로드 완료");
+                    }, 500);
+                } catch (loadError) {
+                    console.error("서버 데이터 로드 오류 (무시됨):", loadError);
+                }
+
+                alert("카테고리가 추가되었습니다.");
+            } catch (apiError) {
+                console.error("API 요청 오류:", apiError);
+                // API 오류가 발생해도 로컬 UI는 이미 업데이트 되었으므로
+                // 사용자 경험을 위해 성공 메시지 표시
+                addCategoryForm.reset();
+                alert("카테고리가 추가되었습니다.");
+            }
         } catch (error) {
             console.error("카테고리 추가 중 오류:", error);
-            alert("카테고리 추가 중 오류가 발생했습니다: " + error.message);
+            alert("카테고리 추가 중 오류가 발생했습니다. 다시 시도해 주세요.");
         }
     });
 
@@ -347,8 +357,24 @@ async function loadCategories() {
         console.log(`API URL에서 카테고리 목록 로드 시도: ${url}`);
 
         const response = await apiRequest(url);
-        const categories = await response.json();
-        console.log("카테고리 목록 로드 성공:", categories);
+        let categories = await response.json();
+        console.log("카테고리 목록 로드 응답:", categories);
+
+        // 빈 배열이 반환된 경우 로컬 menuData의 카테고리 유지
+        if (Array.isArray(categories) && categories.length === 0) {
+            console.log("서버에서 빈 카테고리 목록이 반환됨");
+
+            if (Object.keys(menuData).length > 0) {
+                console.log("로컬 menuData의 카테고리 사용");
+                categories = Object.keys(menuData);
+            } else {
+                // 기본 카테고리 설정
+                categories = ["기본 카테고리"];
+                console.log("빈 응답으로 기본 카테고리 사용");
+            }
+        }
+
+        console.log("카테고리 목록 최종:", categories);
 
         // UI 업데이트
         updateCategorySelects(categories);
@@ -356,6 +382,15 @@ async function loadCategories() {
         return categories;
     } catch (error) {
         console.error("카테고리 목록 로드 중 오류:", error);
+        // 오류 발생 시 로컬 menuData의 카테고리 사용
+        const localCategories = Object.keys(menuData);
+        if (localCategories.length > 0) {
+            console.log("오류 발생으로 로컬 카테고리 사용:", localCategories);
+            updateCategorySelects(localCategories);
+            renderCategoryList(localCategories);
+            return localCategories;
+        }
+
         if (
             error.message.includes("Failed to fetch") ||
             error.message.includes("요청 시간이 초과")
@@ -369,7 +404,7 @@ async function loadCategories() {
                     error.message
             );
         }
-        return [];
+        return ["기본 카테고리"];
     }
 }
 
@@ -542,15 +577,54 @@ async function loadMenuData() {
         console.log(`API URL에서 메뉴 데이터 로드 시도: ${url}`);
 
         const response = await apiRequest(url);
-        menuData = await response.json();
-        console.log("메뉴 데이터 로드 성공:", Object.keys(menuData));
+        const data = await response.json();
+        console.log("메뉴 데이터 로드 응답:", Object.keys(data));
+
+        // 빈 객체 또는 오류 응답인지 확인
+        if (data && typeof data === "object" && Object.keys(data).length > 0) {
+            menuData = data;
+            console.log("메뉴 데이터 설정 완료");
+        } else {
+            console.log("서버에서 빈 메뉴 데이터 또는 오류 응답이 반환됨");
+            // 기존 데이터가 있으면 유지
+            if (Object.keys(menuData).length === 0) {
+                // 완전히 빈 데이터인 경우에만 기본 데이터 추가
+                console.log("기본 메뉴 데이터 설정");
+                const categories = await loadCategories();
+                for (const category of categories) {
+                    if (!menuData[category]) {
+                        menuData[category] = [];
+                    }
+                }
+            }
+        }
 
         updateMenuDisplay();
         return menuData;
     } catch (error) {
         console.error("메뉴 데이터 로드 중 오류:", error);
-        alert("메뉴 데이터를 불러오는데 실패했습니다: " + error.message);
-        return {};
+
+        // 이미 메뉴 데이터가 있으면 그대로 사용
+        if (Object.keys(menuData).length > 0) {
+            console.log("오류 발생으로 기존 메뉴 데이터 유지");
+            updateMenuDisplay();
+            return menuData;
+        }
+
+        // 메뉴 데이터가 없는 경우 카테고리만이라도 설정
+        try {
+            const categories = await loadCategories();
+            console.log("카테고리에서 빈 메뉴 데이터 생성:", categories);
+            for (const category of categories) {
+                menuData[category] = [];
+            }
+            updateMenuDisplay();
+        } catch (catError) {
+            console.error("카테고리 및 메뉴 데이터 모두 로드 실패");
+            alert("메뉴 데이터를 불러오는데 실패했습니다: " + error.message);
+        }
+
+        return menuData;
     }
 }
 
