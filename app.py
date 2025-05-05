@@ -71,30 +71,11 @@ def get_db():
                 print(f"데이터베이스 디렉토리 생성 실패: {str(e)}")
                 raise
 
-        # 데이터베이스 파일 존재 여부 확인
-        if not os.path.exists(DATABASE):
-            print(f"데이터베이스 파일이 존재하지 않습니다: {DATABASE}")
-            # 데이터베이스 초기화
-            init_db()
-        else:
-            print(f"데이터베이스 파일이 존재합니다: {DATABASE}")
-            # 파일 크기 확인
-            file_size = os.path.getsize(DATABASE)
-            print(f"데이터베이스 파일 크기: {file_size} bytes")
-
         # 데이터베이스 연결 시도
         try:
             db = sqlite3.connect(DATABASE)
             db.row_factory = sqlite3.Row
             print("데이터베이스 연결 성공")
-            
-            # 테이블 존재 여부 확인
-            cursor = db.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='menu'")
-            if not cursor.fetchone():
-                print("menu 테이블이 존재하지 않습니다. 초기화를 진행합니다.")
-                init_db()
-            
             return db
         except Exception as e:
             print(f"데이터베이스 연결 실패: {str(e)}")
@@ -106,72 +87,123 @@ def get_db():
 
 def init_db():
     try:
-        with get_db() as db:
-            # 테이블 생성 (order_index 필드 추가)
-            db.execute('''
-                CREATE TABLE IF NOT EXISTS menu (
-                    id INTEGER PRIMARY KEY,
-                    category TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    price TEXT NOT NULL,
-                    image TEXT NOT NULL,
-                    temperature TEXT,
-                    order_index INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            db.commit()
-            print("데이터베이스 초기화 성공")
+        # 데이터베이스 파일이 있는지 확인
+        db_exists = os.path.exists(DATABASE)
+        print(f"데이터베이스 파일 존재 여부: {db_exists}")
+        
+        # 데이터베이스 연결
+        conn = get_db()
+        
+        # 테이블 생성 (order_index 필드 추가)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS menu (
+                id INTEGER PRIMARY KEY,
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                price TEXT NOT NULL,
+                image TEXT NOT NULL,
+                temperature TEXT,
+                order_index INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.commit()
+        print("테이블 생성 성공")
 
-            # 초기 데이터 확인
-            cursor = db.execute('SELECT COUNT(*) FROM menu')
-            count = cursor.fetchone()[0]
-            print(f"현재 데이터베이스의 메뉴 수: {count}")
+        # 테이블에 데이터가 있는지 확인
+        cursor = conn.execute('SELECT COUNT(*) FROM menu')
+        count = cursor.fetchone()[0]
+        print(f"현재 데이터베이스의 메뉴 수: {count}")
+        
+        # 데이터가 없을 때만 초기 데이터 삽입
+        if count == 0:
+            print("데이터베이스가 비어있어 초기 데이터를 삽입합니다.")
+            initial_data = {
+                "coffee": [
+                    {
+                        "id": 1,
+                        "name": "아메리카노",
+                        "price": "2000",
+                        "image": "logo.png",
+                        "temperature": "H",
+                        "order_index": 0
+                    },
+                    {
+                        "id": 2,
+                        "name": "카페라떼",
+                        "price": "2500",
+                        "image": "logo.png",
+                        "temperature": "H",
+                        "order_index": 1
+                    }
+                ]
+            }
             
-            # 데이터가 없을 때만 초기 데이터 삽입
-            if count == 0:
-                print("데이터베이스가 비어있어 초기 데이터를 삽입합니다.")
-                initial_data = {
-                    "coffee": [
-                        {
-                            "id": 1,
-                            "name": "아메리카노",
-                            "price": "2000",
-                            "image": "logo.png",
-                            "temperature": "H",
-                            "order_index": 0
-                        },
-                        {
-                            "id": 2,
-                            "name": "카페라떼",
-                            "price": "2500",
-                            "image": "logo.png",
-                            "temperature": "H",
-                            "order_index": 1
-                        }
-                    ]
-                }
-                
-                # 초기 데이터 저장
-                for category, items in initial_data.items():
-                    for item in items:
-                        try:
-                            db.execute(
-                                'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), item.get('order_index', 0))
-                            )
-                            print(f"초기 메뉴 항목 저장 성공: {item['name']}")
-                        except Exception as e:
-                            print(f"초기 메뉴 항목 저장 실패: {str(e)}")
-                            continue
-                
-                db.commit()
-                print("초기 데이터 삽입 완료")
-            else:
-                print("기존 데이터가 있어 초기화를 건너뜁니다.")
+            # 초기 데이터 저장
+            for category, items in initial_data.items():
+                for item in items:
+                    try:
+                        conn.execute(
+                            'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), item.get('order_index', 0))
+                        )
+                        print(f"초기 메뉴 항목 저장 성공: {item['name']}")
+                    except Exception as e:
+                        print(f"초기 메뉴 항목 저장 실패: {str(e)}")
+                        continue
+            
+            conn.commit()
+            print("초기 데이터 삽입 완료")
+        else:
+            print("기존 데이터가 있어 초기화를 건너뜁니다.")
+            
+        conn.close()
+        print("데이터베이스 초기화 성공")
     except Exception as e:
         print(f"데이터베이스 초기화 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         raise
+
+# 데이터베이스 초기화 및 테이블 확인
+def ensure_db():
+    try:
+        # 데이터베이스 파일이 없으면 초기화
+        if not os.path.exists(DATABASE):
+            print(f"데이터베이스 파일이 존재하지 않습니다: {DATABASE}")
+            init_db()
+        else:
+            print(f"데이터베이스 파일이 존재합니다: {DATABASE}")
+            # 파일 크기 확인
+            file_size = os.path.getsize(DATABASE)
+            print(f"데이터베이스 파일 크기: {file_size} bytes")
+            
+            # 테이블 존재 여부 확인
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='menu'")
+            if not cursor.fetchone():
+                print("menu 테이블이 존재하지 않습니다. 초기화를 진행합니다.")
+                conn.close()
+                init_db()
+            else:
+                conn.close()
+    except Exception as e:
+        print(f"데이터베이스 확인 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
+
+# 데이터베이스 초기화
+with app.app_context():
+    try:
+        ensure_db()
+    except Exception as e:
+        print(f"앱 시작 시 데이터베이스 초기화 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
 
 def load_menu_data():
     try:
@@ -280,10 +312,6 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'avif'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# 데이터베이스 초기화
-with app.app_context():
-    init_db()
 
 def save_image(file):
     try:
@@ -398,8 +426,15 @@ def get_menu():
         conn = get_db()
         cursor = conn.cursor()
         
-        # 트랜잭션 시작
-        conn.execute("BEGIN TRANSACTION")
+        # 테이블 존재 여부 확인
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='menu'")
+        if not cursor.fetchone():
+            print("menu 테이블이 존재하지 않습니다.")
+            init_db()
+            # 새로운 연결 생성
+            conn.close()
+            conn = get_db()
+            cursor = conn.cursor()
         
         try:
             # 카테고리별로 메뉴 조회
@@ -427,23 +462,24 @@ def get_menu():
                     'order_index': row['order_index']
                 })
             
-            # 트랜잭션 커밋
-            conn.commit()
             print("=== 메뉴 데이터 조회 완료 ===")
             return jsonify(menu_by_category)
             
         except Exception as e:
-            # 오류 발생 시 롤백
-            conn.rollback()
             print(f"메뉴 데이터 조회 중 오류 발생: {str(e)}")
-            raise e
+            import traceback
+            print("상세 오류:")
+            print(traceback.format_exc())
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
             
     except Exception as e:
         print(f"메뉴 데이터 조회 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-    finally:
-        if 'conn' in locals():
-            conn.close()
 
 @app.route('/api/menu', methods=['POST'])
 def add_menu():
