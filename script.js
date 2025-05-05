@@ -479,14 +479,12 @@ async function loadServerData(isInitialLoad = true) {
                 headers: {
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     Pragma: "no-cache",
-                    Expires: "0",
                 },
             }),
             fetch(`${API_BASE_URL}/api/menu?t=${timestamp}`, {
                 headers: {
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     Pragma: "no-cache",
-                    Expires: "0",
                 },
             }),
         ]);
@@ -601,7 +599,6 @@ async function loadCategories() {
                 headers: {
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     Pragma: "no-cache",
-                    Expires: "0",
                 },
             },
             3
@@ -1194,7 +1191,6 @@ function toggleAdminMode() {
                     headers: {
                         "Cache-Control": "no-cache, no-store, must-revalidate",
                         Pragma: "no-cache",
-                        Expires: "0",
                     },
                 }
             );
@@ -1379,7 +1375,6 @@ async function handleDrop() {
                     "Content-Type": "application/json",
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     Pragma: "no-cache",
-                    Expires: "0",
                 },
                 body: JSON.stringify(menuData),
             });
