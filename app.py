@@ -328,6 +328,13 @@ def get_menu():
         else:
             # 로컬 환경에서는 Render 서버의 데이터 사용
             menu_data = get_menu_from_render()
+            
+            # 이미지 동기화
+            for category in menu_data.values():
+                for item in category:
+                    if item['image'] != 'logo.png':
+                        sync_image_to_local(item['image'])
+        
         print("Sending menu data:", menu_data)
         return jsonify(menu_data)
     except Exception as e:
@@ -363,6 +370,13 @@ def add_menu():
         if image_file and image_file.filename != '':
             try:
                 image_filename = save_image(image_file)
+                # Render 서버에 이미지 전송
+                if not os.environ.get('RENDER'):
+                    with open(os.path.join(app.config['UPLOAD_FOLDER'], image_filename), 'rb') as img_file:
+                        files = {'image': (image_filename, img_file, 'image/jpeg')}
+                        response = requests.post(f"{RENDER_API_URL}/api/upload-image", files=files)
+                        if response.status_code != 200:
+                            print(f"Render 서버에 이미지 전송 실패: {response.status_code}")
             except Exception as e:
                 print(f"이미지 저장 실패: {str(e)}")
         
@@ -615,20 +629,45 @@ def update_menu_order():
         if not new_menu_data:
             return jsonify({'error': '메뉴 데이터가 필요합니다.'}), 400
         
+        print(f"받은 메뉴 데이터: {new_menu_data}")
+        
         # 기존 메뉴 데이터 로드
         menu_data = load_menu_data()
+        print(f"기존 메뉴 데이터: {menu_data}")
         
         # 새로운 메뉴 데이터로 업데이트
+        menu_data.clear()
         menu_data.update(new_menu_data)
         
         # 변경사항 저장
-        save_menu_data(menu_data)
+        if os.environ.get('RENDER'):
+            save_menu_data(menu_data)
+        else:
+            save_menu_to_render(menu_data)
         
+        print(f"저장된 메뉴 데이터: {menu_data}")
         return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'}), 200
         
     except Exception as e:
         print(f"메뉴 순서 업데이트 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+def sync_image_to_local(image_filename):
+    try:
+        if os.environ.get('RENDER'):
+            # Render 서버에서 이미지 다운로드
+            response = requests.get(f"{RENDER_API_URL}/static/images/{image_filename}")
+            if response.status_code == 200:
+                # 로컬에 이미지 저장
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
+                with open(filepath, 'wb') as f:
+                    f.write(response.content)
+                print(f"이미지 동기화 성공: {image_filename}")
+                return True
+        return False
+    except Exception as e:
+        print(f"이미지 동기화 실패: {str(e)}")
+        return False
 
 def create_default_logo():
     try:
