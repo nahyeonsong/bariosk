@@ -130,19 +130,31 @@ def init_db():
         # 데이터베이스 연결
         conn = get_db()
         
-        # 테이블 생성 (order_index 필드 추가)
+        # 메뉴 테이블 생성 (order_index 필드 추가)
         conn.execute('''
-            CREATE TABLE IF NOT EXISTS menu (
-                id INTEGER PRIMARY KEY,
-                category TEXT NOT NULL,
-                name TEXT NOT NULL,
-                price TEXT NOT NULL,
-                image TEXT NOT NULL,
-                temperature TEXT,
-                order_index INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                CREATE TABLE IF NOT EXISTS menu (
+                    id INTEGER PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    price TEXT NOT NULL,
+                    image TEXT NOT NULL,
+                    temperature TEXT,
+                    order_index INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+        # 카테고리 순서 전용 테이블 생성
+        conn.execute('''
+                CREATE TABLE IF NOT EXISTS category_order (
+                    id INTEGER PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    order_index INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(category)
+                )
+            ''')
+            
         conn.commit()
         print("테이블 생성 성공")
         
@@ -153,7 +165,7 @@ def init_db():
         cursor = conn.execute('SELECT COUNT(*) FROM menu')
         count = cursor.fetchone()[0]
         print(f"현재 데이터베이스의 메뉴 수: {count}")
-        
+            
         # 데이터가 없을 때만 초기 데이터 삽입
         if count == 0:
             print("데이터베이스가 비어있어 초기 데이터를 삽입합니다.")
@@ -177,9 +189,19 @@ def init_db():
                     }
                 ]
             }
-            
+                
             # 초기 데이터 저장
             for category, items in initial_data.items():
+                # 카테고리 순서 저장
+                try:
+                    conn.execute(
+                        'INSERT INTO category_order (category, order_index) VALUES (?, ?)',
+                        (category, 0)
+                    )
+                    print(f"카테고리 '{category}' 순서 저장 완료")
+                except Exception as e:
+                    print(f"카테고리 순서 저장 중 오류: {str(e)}")
+                    
                 for item in items:
                     try:
                         conn.execute(
@@ -864,35 +886,53 @@ def get_categories():
             conn = get_db()
             cursor = conn.cursor()
             
-            # 시스템 항목의 order_index를 기준으로 카테고리 정렬
+            # 카테고리 순서 테이블에서 먼저 조회 시도
             cursor.execute("""
-                SELECT category, MIN(order_index) as category_order
-                FROM menu 
-                GROUP BY category
-                ORDER BY 
-                    CASE 
-                        WHEN MIN(order_index) <= -900 THEN MIN(order_index) 
-                        ELSE 999999 
-                    END ASC,
-                    category ASC
+                SELECT category
+                FROM category_order
+                ORDER BY order_index ASC
             """)
             
-            all_categories = [row['category'] for row in cursor.fetchall()]
-            print(f"데이터베이스에서 조회된 모든 카테고리 (순서 적용): {all_categories}")
+            ordered_categories = [row['category'] for row in cursor.fetchall()]
+            print(f"카테고리 순서 테이블에서 조회된 카테고리: {ordered_categories}")
+            
+            # 순서 테이블에 없는 카테고리를 일반 메뉴 테이블에서 조회
+            if not ordered_categories:
+                cursor.execute("""
+                    SELECT DISTINCT category 
+                    FROM menu
+                    ORDER BY category ASC
+                """)
+                ordered_categories = [row['category'] for row in cursor.fetchall()]
+                print(f"메뉴 테이블에서 조회된 카테고리: {ordered_categories}")
+                
+                # 순서 테이블에 카테고리 추가 시도
+                try:
+                    cursor.execute("BEGIN TRANSACTION")
+                    for idx, category in enumerate(ordered_categories):
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO category_order (category, order_index)
+                            VALUES (?, ?)
+                        """, (category, idx))
+                    cursor.execute("COMMIT")
+                    print(f"카테고리 {len(ordered_categories)}개를 순서 테이블에 동기화함")
+                except Exception as e:
+                    cursor.execute("ROLLBACK")
+                    print(f"카테고리 순서 테이블 동기화 중 오류: {str(e)}")
             
             conn.close()
             
             # 백업: 데이터베이스에서 가져온 카테고리가 없으면 menu_data 사용
-            if not all_categories:
+            if not ordered_categories:
                 menu_data = load_menu_data()
-                all_categories = list(menu_data.keys())
-                print(f"menu_data에서 대체로 가져온 카테고리 목록: {all_categories}")
+                ordered_categories = list(menu_data.keys())
+                print(f"menu_data에서 대체로 가져온 카테고리 목록: {ordered_categories}")
             
             print("=== 카테고리 목록 조회 완료 ===")
             
             # 캐시 방지 및 타임스탬프 추가
             response = jsonify({
-                "categories": all_categories,
+                "categories": ordered_categories,
                 "timestamp": int(time.time()),
                 "server": "Render" if os.environ.get('RENDER') else "Local"
             })
@@ -1008,24 +1048,26 @@ def add_category():
             # 카테고리 추가 (빈 메뉴 항목 사용)
             cursor.execute("""
                 INSERT INTO menu (category, name, price, image, temperature, order_index)
-                VALUES (?, '시스템 항목', '0', 'logo.png', '', -999)
+                VALUES (?, '대표메뉴', '0', 'logo.png', '', 0)
             """, (category_name,))
+            
+            # 카테고리 순서 테이블에도 추가
+            # 먼저 현재 최대 order_index 조회
+            cursor.execute("SELECT MAX(order_index) as max_order FROM category_order")
+            result = cursor.fetchone()
+            next_order = (result['max_order'] or -1) + 1
+            
+            # 카테고리 순서 추가
+            cursor.execute("""
+                INSERT INTO category_order (category, order_index)
+                VALUES (?, ?)
+            """, (category_name, next_order))
             
             # 변경사항 커밋
             cursor.execute("COMMIT")
-            
-            print(f"카테고리 '{category_name}'가 데이터베이스에 추가되었습니다.")
             conn.close()
             
-            # 메뉴 데이터도 업데이트 (동기화)
-            try:
-                menu_data = load_menu_data()
-                if category_name not in menu_data:
-                    menu_data[category_name] = []
-                    save_menu_data(menu_data)
-                print(f"메뉴 데이터 동기화 완료")
-            except Exception as sync_error:
-                print(f"메뉴 데이터 동기화 실패 (무시됨): {str(sync_error)}")
+            print(f"카테고리 '{category_name}'가 데이터베이스에 추가되었습니다.")
             
             # Render 서버와 동기화 (로컬 환경에서만)
             if not os.environ.get('RENDER'):
@@ -1076,7 +1118,6 @@ def delete_category(category_name):
     try:
         print(f"=== 카테고리 '{category_name}' 삭제 시작 ===")
         
-        # 데이터베이스에서 직접 카테고리 삭제
         try:
             conn = get_db()
             cursor = conn.cursor()
@@ -1093,6 +1134,7 @@ def delete_category(category_name):
             
             if cursor.fetchone()[0] == 0:
                 cursor.execute('ROLLBACK')
+                conn.close()
                 return jsonify({'error': '존재하지 않는 카테고리입니다.'}), 404
             
             # 해당 카테고리의 모든 항목 삭제
@@ -1104,11 +1146,39 @@ def delete_category(category_name):
             deleted_count = cursor.rowcount
             print(f"삭제된 메뉴 항목 수: {deleted_count}")
             
+            # 카테고리 순서 테이블에서도 삭제
+            cursor.execute("""
+                DELETE FROM category_order
+                WHERE category = ?
+            """, (category_name,))
+            
+            print(f"카테고리 순서 테이블에서 '{category_name}' 삭제됨")
+            
             # 커밋
             cursor.execute('COMMIT')
             conn.close()
             
             print(f"카테고리 '{category_name}'가 데이터베이스에서 삭제되었습니다.")
+            
+            # Render 서버와 동기화 (로컬 환경에서만)
+            if not os.environ.get('RENDER'):
+                try:
+                    response = requests.delete(
+                        f"{RENDER_API_URL}/api/categories/{category_name}",
+                        timeout=10  # 타임아웃 10초 설정
+                    )
+                    
+                    print(f"Render 서버 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        print("Render 서버에서 카테고리 삭제 성공")
+                    else:
+                        print(f"Render 서버에서 카테고리 삭제 실패: {response.text}")
+                except Exception as e:
+                    print(f"Render 서버 동기화 중 오류: {str(e)}")
+                    # Render 서버 동기화 실패는 무시하고 계속 진행
+        
+            print(f"=== 카테고리 '{category_name}' 삭제 완료 ===")
+            return jsonify({'message': f'카테고리 "{category_name}"가 삭제되었습니다.'}), 200
             
         except Exception as db_error:
             print(f"데이터베이스에서 카테고리 삭제 중 오류: {str(db_error)}")
@@ -1116,46 +1186,10 @@ def delete_category(category_name):
                 cursor.execute('ROLLBACK')
                 conn.close()
             
-            # 예비책: 데이터베이스 직접 접근 실패 시 menu_data 사용
-            menu_data = load_menu_data()
-            
-            if category_name not in menu_data:
-                return jsonify({'error': '존재하지 않는 카테고리입니다.'}), 404
-            
-            # 카테고리 삭제
-            del menu_data[category_name]
-            save_menu_data(menu_data)
-            print(f"예비 방식으로 카테고리 '{category_name}' 삭제 완료")
-        
-        # menu_data도 업데이트하여 동기화 상태 유지
-        try:
-            menu_data = load_menu_data()
-            if category_name in menu_data:
-                del menu_data[category_name]
-                save_menu_data(menu_data)
-                print(f"menu_data에서 카테고리 '{category_name}' 삭제 완료")
-        except Exception as sync_error:
-            print(f"menu_data 동기화 중 오류 (무시됨): {str(sync_error)}")
-        
-        # Render 서버와 동기화 (로컬 환경에서만)
-        if not os.environ.get('RENDER'):
-            try:
-                response = requests.delete(
-                    f"{RENDER_API_URL}/api/categories/{category_name}",
-                    timeout=10  # 타임아웃 10초 설정
-                )
-                
-                print(f"Render 서버 응답 상태 코드: {response.status_code}")
-                if response.status_code == 200:
-                    print("Render 서버에서 카테고리 삭제 성공")
-                else:
-                    print(f"Render 서버에서 카테고리 삭제 실패: {response.text}")
-            except Exception as e:
-                print(f"Render 서버 동기화 중 오류: {str(e)}")
-                # Render 서버 동기화 실패는 무시하고 계속 진행
-        
-        print(f"=== 카테고리 '{category_name}' 삭제 완료 ===")
-        return jsonify({'message': f'카테고리 "{category_name}"가 삭제되었습니다.'}), 200
+            import traceback
+            print("상세 오류:")
+            print(traceback.format_exc())
+            return jsonify({'error': f'카테고리 삭제 실패: {str(db_error)}'}), 500
         
     except Exception as e:
         print(f"카테고리 삭제 중 오류 발생: {str(e)}")
@@ -1173,48 +1207,86 @@ def update_category(category_name):
             return jsonify({'error': '카테고리 이름이 필요합니다'}), 400
 
         print(f"새 카테고리 이름: {new_name}")
-        
-        # 메뉴 데이터 로드
-        menu_data = load_menu_data()
-
-        # 카테고리가 존재하는지 확인
-        if category_name not in menu_data:
-            return jsonify({'error': '카테고리가 존재하지 않습니다'}), 404
 
         # 새 이름이 현재 이름과 같으면 아무것도 하지 않음
         if new_name == category_name:
             return jsonify({'message': '카테고리 이름이 변경되지 않았습니다'}), 200
 
-        # 새 이름이 이미 존재하는 경우
-        if new_name in menu_data:
-            return jsonify({'message': '이미 존재하는 카테고리 이름입니다'}), 200
-
-        # 카테고리 이름 변경
-        menu_data[new_name] = menu_data.pop(category_name)
-        save_menu_data(menu_data)
-        print(f"카테고리 이름을 '{category_name}'에서 '{new_name}'으로 변경 완료")
-        
-        # Render 서버와 동기화 (로컬 환경에서만)
-        if not os.environ.get('RENDER'):
-            try:
-                response = requests.put(
-                    f"{RENDER_API_URL}/api/categories/{category_name}",
-                    json={'name': new_name},
-                    headers={'Content-Type': 'application/json'},
-                    timeout=10  # 타임아웃 10초 설정
-                )
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            # 트랜잭션 시작
+            cursor.execute("BEGIN TRANSACTION")
+            
+            # 카테고리 존재 여부 확인
+            cursor.execute("SELECT COUNT(*) FROM menu WHERE category = ?", (category_name,))
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("ROLLBACK")
+                conn.close()
+                return jsonify({'error': '카테고리가 존재하지 않습니다'}), 404
                 
-                print(f"Render 서버 응답 상태 코드: {response.status_code}")
-                if response.status_code == 200:
-                    print("Render 서버에서 카테고리 수정 성공")
-                else:
-                    print(f"Render 서버에서 카테고리 수정 실패: {response.text}")
-            except Exception as e:
-                print(f"Render 서버 동기화 중 오류: {str(e)}")
-                # Render 서버 동기화 실패는 무시하고 계속 진행
+            # 새 이름이 이미 존재하는지 확인
+            cursor.execute("SELECT COUNT(*) FROM menu WHERE category = ?", (new_name,))
+            if cursor.fetchone()[0] > 0:
+                cursor.execute("ROLLBACK")
+                conn.close()
+                return jsonify({'message': '이미 존재하는 카테고리 이름입니다'}), 200
+            
+            # 메뉴 테이블에서 카테고리 이름 변경
+            cursor.execute("""
+                UPDATE menu
+                SET category = ?
+                WHERE category = ?
+            """, (new_name, category_name))
+            
+            # 카테고리 순서 테이블에서도 변경
+            cursor.execute("""
+                UPDATE category_order
+                SET category = ?
+                WHERE category = ?
+            """, (new_name, category_name))
+            
+            # 변경사항 커밋
+            cursor.execute("COMMIT")
+            conn.close()
+            
+            print(f"카테고리 이름을 '{category_name}'에서 '{new_name}'으로 변경 완료")
+            
+            # Render 서버와 동기화 (로컬 환경에서만)
+            if not os.environ.get('RENDER'):
+                try:
+                    response = requests.put(
+                        f"{RENDER_API_URL}/api/categories/{category_name}",
+                        json={'name': new_name},
+                        headers={'Content-Type': 'application/json'},
+                        timeout=10  # 타임아웃 10초 설정
+                    )
+                    
+                    print(f"Render 서버 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        print("Render 서버에서 카테고리 수정 성공")
+                    else:
+                        print(f"Render 서버에서 카테고리 수정 실패: {response.text}")
+                except Exception as e:
+                    print(f"Render 서버 동기화 중 오류: {str(e)}")
+                    # Render 서버 동기화 실패는 무시하고 계속 진행
         
-        print(f"=== 카테고리 수정 완료 ===")
-        return jsonify({'message': '카테고리가 수정되었습니다'}), 200
+            print(f"=== 카테고리 수정 완료 ===")
+            return jsonify({'message': '카테고리가 수정되었습니다'}), 200
+            
+        except Exception as db_error:
+            if 'conn' in locals() and conn:
+                cursor.execute("ROLLBACK")
+                conn.close()
+                
+            print(f"데이터베이스 작업 중 오류: {str(db_error)}")
+            import traceback
+            print("상세 오류:")
+            print(traceback.format_exc())
+            
+            return jsonify({'error': f'카테고리 수정 실패: {str(db_error)}'}), 500
+            
     except Exception as e:
         print(f"카테고리 수정 중 오류 발생: {str(e)}")
         import traceback
@@ -1413,9 +1485,6 @@ def update_category_order():
         if is_sync_request:
             print(f"동기화 요청 (출처: {sync_source})")
         
-        # 순서가 있는 카테고리 목록을 DB에 저장할 방법이 필요함
-        # 새로운 메타데이터 테이블을 생성하거나, 기존 메뉴 항목에 순서 정보를 추가하는 방식으로 구현
-        
         try:
             conn = get_db()
             cursor = conn.cursor()
@@ -1424,58 +1493,33 @@ def update_category_order():
             cursor.execute("BEGIN TRANSACTION")
             
             # 기존 카테고리 정보 조회
-            cursor.execute("""
-                SELECT DISTINCT category FROM menu
-                ORDER BY category
-            """)
-            
+            cursor.execute("SELECT category FROM category_order ORDER BY order_index")
             existing_categories = [row['category'] for row in cursor.fetchall()]
             print(f"기존 카테고리 목록: {existing_categories}")
             
-            # 순서가 변경된 카테고리만 처리
-            if set(categories) != set(existing_categories):
-                print(f"경고: 카테고리 집합이 일치하지 않습니다. 받은 카테고리: {set(categories)}, 기존 카테고리: {set(existing_categories)}")
-                
-                # 새로운 카테고리가 있으면 추가
-                for category in categories:
-                    if category not in existing_categories:
-                        print(f"새로운 카테고리 추가: {category}")
-                        cursor.execute("""
-                            INSERT INTO menu (category, name, price, image, temperature, order_index)
-                            VALUES (?, '시스템 항목', '0', 'logo.png', '', ?)
-                        """, (category, -999))
+            # 모든 카테고리 순서 초기화
+            cursor.execute("DELETE FROM category_order")
+            print("기존 카테고리 순서 초기화")
             
-            # 모든 카테고리의 order_index를 높은 값으로 초기화 (정렬 순서 재설정 위해)
-            cursor.execute("""
-                UPDATE menu 
-                SET order_index = 99999 
-                WHERE name = '시스템 항목'
-            """)
-            
-            # 모든 카테고리의 시스템 항목 업데이트 (카테고리 순서 정보 저장용)
+            # 새 순서 저장
             for index, category in enumerate(categories):
-                # 이 카테고리의 시스템 항목 찾기
                 cursor.execute("""
-                    SELECT id FROM menu 
-                    WHERE category = ? AND name = '시스템 항목'
-                """, (category,))
-                
-                system_item = cursor.fetchone()
-                if system_item:
-                    # 시스템 항목이 있으면 order_index 업데이트
-                    cursor.execute("""
-                        UPDATE menu 
-                        SET order_index = ? 
-                        WHERE id = ?
-                    """, (-999 - index, system_item['id']))
-                    print(f"카테고리 '{category}' 순서 업데이트: {index}")
-                else:
-                    # 시스템 항목이 없으면 생성
+                    INSERT INTO category_order (category, order_index)
+                    VALUES (?, ?)
+                """, (category, index))
+                print(f"카테고리 '{category}' 순서 {index}로 저장")
+            
+            # 없는 카테고리가 있는지 확인하고 필요하면 메뉴 항목 추가
+            cursor.execute("SELECT DISTINCT category FROM menu")
+            menu_categories = [row['category'] for row in cursor.fetchall()]
+            
+            for category in categories:
+                if category not in menu_categories:
+                    print(f"새 카테고리 '{category}' 발견, 메뉴 항목 추가")
                     cursor.execute("""
                         INSERT INTO menu (category, name, price, image, temperature, order_index)
-                        VALUES (?, '시스템 항목', '0', 'logo.png', '', ?)
-                    """, (category, -999 - index))
-                    print(f"카테고리 '{category}' 시스템 항목 생성 및 순서 설정: {index}")
+                        VALUES (?, '대표메뉴', '0', 'logo.png', '', ?)
+                    """, (category, -999))
             
             # 변경사항 커밋
             cursor.execute("COMMIT")
