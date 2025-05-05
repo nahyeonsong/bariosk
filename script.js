@@ -1291,7 +1291,7 @@ async function cloneMenuItem(item, category) {
         // Create a new item with the same data but a new name
         const newItem = {
             ...item,
-            name: `${item.name} (Copy)`,
+            name: `${item.name}`,
             id: undefined, // Remove the ID so a new one will be generated
             category: category, // 카테고리 명시적 설정
         };
@@ -1407,6 +1407,19 @@ async function handleDrop() {
         const [movedItem] = items.splice(dragStartIndex, 1);
         items.splice(dragEndIndex, 0, movedItem);
 
+        // 메뉴 항목의 order_index 명시적 업데이트
+        for (let i = 0; i < items.length; i++) {
+            items[i].order_index = i;
+        }
+
+        console.log(
+            `메뉴 순서 변경: 카테고리 '${category}'에서 인덱스 ${dragStartIndex}에서 ${dragEndIndex}로`
+        );
+        console.log(
+            "업데이트된 메뉴 순서:",
+            items.map((item) => `${item.name} (order: ${item.order_index})`)
+        );
+
         // 변경된 데이터 저장
         try {
             const response = await fetch(`${API_BASE_URL}/api/menu`, {
@@ -1432,10 +1445,11 @@ async function handleDrop() {
                 }
             }
 
+            console.log("메뉴 순서 업데이트 성공");
             // UI 업데이트
             updateMenuDisplay();
         } catch (error) {
-            console.error("Error:", error);
+            console.error("메뉴 순서 저장 오류:", error);
             alert("메뉴 순서 저장 중 오류가 발생했습니다: " + error.message);
         }
     }
@@ -1844,7 +1858,7 @@ async function handleCategoryDrop(e) {
 
                 // 화면 업데이트
                 updateCategorySelects(categories);
-                renderMenuItems();
+                updateMenuDisplay(categories);
             } else {
                 console.error(
                     "서버 카테고리 순서 업데이트 실패:",
@@ -1858,12 +1872,8 @@ async function handleCategoryDrop(e) {
             }
         } catch (error) {
             console.error("카테고리 순서 업데이트 중 오류:", error);
-            alert(
-                "카테고리 순서를 저장하는 중 오류가 발생했습니다: " +
-                    error.message
-            );
-
-            // 오류 발생 시 원래 상태로 복원
+            alert("서버 연결 오류! 카테고리 순서 업데이트에 실패했습니다.");
+            // 비정상 종료 시 기존 상태로 UI 복원
             loadCategories();
         }
     }
