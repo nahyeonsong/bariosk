@@ -11,6 +11,7 @@ import sqlite3
 from datetime import datetime
 import shutil
 import requests
+import time
 
 app = Flask(__name__, static_folder='static')
 # CORS 설정 - 모든 도메인에서의 요청 허용
@@ -855,7 +856,23 @@ def get_categories():
                 print(f"menu_data에서 대체로 가져온 카테고리 목록: {all_categories}")
             
             print("=== 카테고리 목록 조회 완료 ===")
-            return jsonify(all_categories)
+            
+            # 캐시 방지 및 타임스탬프 추가
+            response = jsonify({
+                "categories": all_categories,
+                "timestamp": int(time.time()),
+                "server": "Render" if os.environ.get('RENDER') else "Local"
+            })
+            
+            # CORS 및 캐시 관련 헤더 추가
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
+            response.headers.add('Pragma', 'no-cache')
+            response.headers.add('Expires', '0')
+            
+            return response
             
         except Exception as db_error:
             print(f"데이터베이스에서 카테고리 조회 중 오류: {str(db_error)}")
@@ -869,14 +886,40 @@ def get_categories():
             print(f"예비 방식으로 조회된 카테고리 목록: {categories}")
             
             print("=== 카테고리 목록 조회 완료 (예비 방식) ===")
-            return jsonify(categories)
+            
+            # 예비 방식 응답에도 캐시 방지 헤더 추가
+            response = jsonify({
+                "categories": categories,
+                "timestamp": int(time.time()),
+                "server": "Render" if os.environ.get('RENDER') else "Local",
+                "method": "fallback"
+            })
+            
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
+            response.headers.add('Pragma', 'no-cache')
+            response.headers.add('Expires', '0')
+            
+            return response
             
     except Exception as e:
         print(f"카테고리 목록 조회 중 오류 발생: {str(e)}")
         import traceback
         print("상세 오류:")
         print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        
+        # 오류 응답에도 캐시 방지 헤더 추가
+        response = jsonify({
+            'error': str(e),
+            'timestamp': int(time.time())
+        })
+        
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
+        response.headers.add('Pragma', 'no-cache')
+        response.headers.add('Expires', '0')
+        
+        return response, 500
 
 @app.route('/api/categories', methods=['POST'])
 def add_category():
@@ -1347,33 +1390,47 @@ def update_category_order():
             # 순서가 변경된 카테고리만 처리
             if set(categories) != set(existing_categories):
                 print(f"경고: 카테고리 집합이 일치하지 않습니다. 받은 카테고리: {set(categories)}, 기존 카테고리: {set(existing_categories)}")
-            
-            # 모든 카테고리의 시스템 항목 업데이트 (카테고리 순서 정보 저장용)
-            for index, category in enumerate(categories):
-                # 기존 카테고리인지 확인
-                if category in existing_categories:
-                    # 이 카테고리의 시스템 항목 찾기
-                    cursor.execute("""
-                        SELECT id FROM menu 
-                        WHERE category = ? AND name = '시스템 항목'
-                    """, (category,))
-                    
-                    system_item = cursor.fetchone()
-                    if system_item:
-                        # 시스템 항목이 있으면 order_index 업데이트
-                        cursor.execute("""
-                            UPDATE menu 
-                            SET order_index = ? 
-                            WHERE id = ?
-                        """, (-999 - index, system_item['id']))
-                        print(f"카테고리 '{category}' 순서 업데이트: {index}")
-                    else:
-                        # 시스템 항목이 없으면 생성
+                
+                # 새로운 카테고리가 있으면 추가
+                for category in categories:
+                    if category not in existing_categories:
+                        print(f"새로운 카테고리 추가: {category}")
                         cursor.execute("""
                             INSERT INTO menu (category, name, price, image, temperature, order_index)
                             VALUES (?, '시스템 항목', '0', 'logo.png', '', ?)
-                        """, (category, -999 - index))
-                        print(f"카테고리 '{category}' 시스템 항목 생성 및 순서 설정: {index}")
+                        """, (category, -999))
+            
+            # 모든 카테고리의 order_index를 높은 값으로 초기화 (정렬 순서 재설정 위해)
+            cursor.execute("""
+                UPDATE menu 
+                SET order_index = 99999 
+                WHERE name = '시스템 항목'
+            """)
+            
+            # 모든 카테고리의 시스템 항목 업데이트 (카테고리 순서 정보 저장용)
+            for index, category in enumerate(categories):
+                # 이 카테고리의 시스템 항목 찾기
+                cursor.execute("""
+                    SELECT id FROM menu 
+                    WHERE category = ? AND name = '시스템 항목'
+                """, (category,))
+                
+                system_item = cursor.fetchone()
+                if system_item:
+                    # 시스템 항목이 있으면 order_index 업데이트
+                    cursor.execute("""
+                        UPDATE menu 
+                        SET order_index = ? 
+                        WHERE id = ?
+                    """, (-999 - index, system_item['id']))
+                    print(f"카테고리 '{category}' 순서 업데이트: {index}")
+                else:
+                    # 시스템 항목이 없으면 생성
+                    cursor.execute("""
+                        INSERT INTO menu (category, name, price, image, temperature, order_index)
+                        VALUES (?, '시스템 항목', '0', 'logo.png', '', ?)
+                    """, (category, -999 - index))
+                    print(f"카테고리 '{category}' 시스템 항목 생성 및 순서 설정: {index}")
             
             # 변경사항 커밋
             cursor.execute("COMMIT")
@@ -1389,8 +1446,13 @@ def update_category_order():
                     response = requests.put(
                         f"https://bariosk.onrender.com/api/categories/order",
                         json={'categories': categories},
-                        headers={'Content-Type': 'application/json'},
-                        timeout=10  # 타임아웃 10초 설정
+                        headers={
+                            'Content-Type': 'application/json',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
+                        },
+                        timeout=15  # 타임아웃 15초 설정
                     )
                     
                     print(f"Render 서버 응답 상태 코드: {response.status_code}")
@@ -1398,6 +1460,21 @@ def update_category_order():
                         print("Render 서버에서 카테고리 순서 동기화 성공")
                     else:
                         print(f"Render 서버에서 카테고리 순서 동기화 실패: {response.text}")
+                        # 실패하면 다시 시도
+                        print("Render 서버 동기화 다시 시도")
+                        time.sleep(2)  # 2초 대기
+                        retry_response = requests.put(
+                            f"https://bariosk.onrender.com/api/categories/order",
+                            json={'categories': categories},
+                            headers={
+                                'Content-Type': 'application/json',
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache',
+                                'Expires': '0'
+                            },
+                            timeout=15
+                        )
+                        print(f"재시도 응답 상태 코드: {retry_response.status_code}")
                 elif os.environ.get('RENDER'):
                     print("현재 Render 서버에서 실행 중이므로 동기화 생략")
                 else:
@@ -1406,7 +1483,16 @@ def update_category_order():
                 print(f"Render 서버 동기화 중 오류: {str(e)}")
                 # Render 서버 동기화 실패는 무시하고 계속 진행
             
-            return jsonify({'message': '카테고리 순서가 업데이트되었습니다.'}), 200
+            # CORS 헤더 추가
+            response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': categories})
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
+            response.headers.add('Pragma', 'no-cache')
+            response.headers.add('Expires', '0')
+            
+            return response, 200
             
         except Exception as db_error:
             if 'conn' in locals() and conn:
