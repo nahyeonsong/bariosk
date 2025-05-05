@@ -106,7 +106,7 @@ def get_db():
 def init_db():
     try:
         with get_db() as db:
-            # 테이블 생성
+            # 테이블 생성 (order_index 필드 추가)
             db.execute('''
                 CREATE TABLE IF NOT EXISTS menu (
                     id INTEGER PRIMARY KEY,
@@ -115,6 +115,7 @@ def init_db():
                     price TEXT NOT NULL,
                     image TEXT NOT NULL,
                     temperature TEXT,
+                    order_index INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -136,14 +137,16 @@ def init_db():
                             "name": "아메리카노",
                             "price": "2000",
                             "image": "logo.png",
-                            "temperature": "H"
+                            "temperature": "H",
+                            "order_index": 0
                         },
                         {
                             "id": 2,
                             "name": "카페라떼",
                             "price": "2500",
                             "image": "logo.png",
-                            "temperature": "H"
+                            "temperature": "H",
+                            "order_index": 1
                         }
                     ]
                 }
@@ -152,8 +155,8 @@ def init_db():
                 for category, items in initial_data.items():
                     for item in items:
                         db.execute(
-                            'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
-                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''))
+                            'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), item.get('order_index', 0))
                         )
                 db.commit()
                 print("초기 데이터 삽입 완료")
@@ -166,7 +169,11 @@ def init_db():
 def load_menu_data():
     try:
         with get_db() as db:
-            cursor = db.execute('SELECT * FROM menu ORDER BY category, id')
+            # 카테고리별로 데이터를 가져오되, order_index 순서로 정렬
+            cursor = db.execute('''
+                SELECT * FROM menu 
+                ORDER BY category, order_index
+            ''')
             menu_data = {}
             for row in cursor:
                 category = row['category']
@@ -177,7 +184,8 @@ def load_menu_data():
                     'name': row['name'],
                     'price': row['price'],
                     'image': row['image'],
-                    'temperature': row['temperature']
+                    'temperature': row['temperature'],
+                    'order_index': row['order_index']
                 })
             print(f"메뉴 데이터 로드 성공: {menu_data}")
             return menu_data
@@ -193,15 +201,15 @@ def save_menu_data(data):
             db.execute('DELETE FROM menu')
             print("기존 데이터 삭제 완료")
             
-            # 새 데이터 저장
+            # 새 데이터 저장 (순서 유지를 위해 order_index 사용)
             for category, items in data.items():
-                for item in items:
+                for index, item in enumerate(items):
                     try:
-                        print(f"저장할 항목: id={item['id']}, category={category}, name={item['name']}, price={item['price']}, image={item['image']}, temperature={item.get('temperature', '')}")
+                        print(f"저장할 항목: id={item['id']}, category={category}, name={item['name']}, price={item['price']}, image={item['image']}, temperature={item.get('temperature', '')}, order_index={index}")
                         
                         db.execute(
-                            'INSERT INTO menu (id, category, name, price, image, temperature) VALUES (?, ?, ?, ?, ?, ?)',
-                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''))
+                            'INSERT INTO menu (id, category, name, price, image, temperature, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                            (item['id'], category, item['name'], str(item['price']), item['image'], item.get('temperature', ''), index)
                         )
                         print(f"메뉴 항목 저장 성공: {item['name']}")
                     except Exception as e:
@@ -212,7 +220,7 @@ def save_menu_data(data):
             print("모든 메뉴 데이터 저장 완료")
             
             # 저장된 데이터 확인
-            cursor = db.execute('SELECT * FROM menu')
+            cursor = db.execute('SELECT * FROM menu ORDER BY category, order_index')
             saved_data = cursor.fetchall()
             print(f"저장된 데이터 확인: {len(saved_data)}개 항목")
             for row in saved_data:
@@ -220,6 +228,9 @@ def save_menu_data(data):
             
     except Exception as e:
         print(f"메뉴 데이터 저장 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         raise
 
 # 허용된 파일 확장자
@@ -298,7 +309,15 @@ def get_menu_from_render():
     try:
         response = requests.get(f"{RENDER_API_URL}/api/menu")
         if response.status_code == 200:
-            return response.json()
+            menu_data = response.json()
+            print(f"Render 서버에서 메뉴 데이터 가져옴: {menu_data}")
+            
+            # 로컬 데이터베이스에 저장
+            if not os.environ.get('RENDER'):
+                save_menu_data(menu_data)
+                print("로컬 데이터베이스에 메뉴 데이터 저장 완료")
+            
+            return menu_data
         else:
             print(f"Render 서버에서 메뉴 데이터를 가져오는데 실패했습니다: {response.status_code}")
             return {}
@@ -308,15 +327,26 @@ def get_menu_from_render():
 
 def save_menu_to_render(data):
     try:
+        print(f"Render 서버에 저장할 데이터: {data}")
         response = requests.put(f"{RENDER_API_URL}/api/menu", json=data)
+        print(f"Render 서버 응답 상태 코드: {response.status_code}")
+        print(f"Render 서버 응답 내용: {response.text}")
+        
         if response.status_code == 200:
             print("메뉴 데이터가 Render 서버에 저장되었습니다.")
+            # 로컬 데이터베이스에도 저장
+            if not os.environ.get('RENDER'):
+                save_menu_data(data)
+                print("로컬 데이터베이스에도 메뉴 데이터 저장 완료")
             return True
         else:
             print(f"Render 서버에 메뉴 데이터를 저장하는데 실패했습니다: {response.status_code}")
             return False
     except Exception as e:
         print(f"Render 서버 연결 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         return False
 
 @app.route('/api/menu', methods=['GET'])
@@ -326,7 +356,7 @@ def get_menu():
             # Render 환경에서는 로컬 데이터베이스 사용
             menu_data = load_menu_data()
         else:
-            # 로컬 환경에서는 Render 서버의 데이터 사용
+            # 로컬 환경에서는 Render 서버의 데이터를 가져와서 로컬에도 저장
             menu_data = get_menu_from_render()
             
             # 이미지 동기화
@@ -348,7 +378,7 @@ def add_menu():
             # Render 환경에서는 로컬 데이터베이스 사용
             menu_data = load_menu_data()
         else:
-            # 로컬 환경에서는 Render 서버의 데이터 사용
+            # 로컬 환경에서는 Render 서버의 데이터를 가져와서 로컬에도 저장
             menu_data = get_menu_from_render()
         
         print(f"현재 메뉴 데이터: {menu_data}")
@@ -405,8 +435,10 @@ def add_menu():
         
         # 데이터 저장
         if os.environ.get('RENDER'):
+            # Render 환경에서는 로컬 데이터베이스에만 저장
             save_menu_data(menu_data)
         else:
+            # 로컬 환경에서는 Render 서버와 로컬 모두에 저장
             save_menu_to_render(menu_data)
         
         return jsonify({'message': '메뉴가 추가되었습니다'}), 201
@@ -641,15 +673,25 @@ def update_menu_order():
         
         # 변경사항 저장
         if os.environ.get('RENDER'):
+            # Render 환경에서는 로컬 데이터베이스에만 저장
             save_menu_data(menu_data)
+            print("Render 환경: 로컬 데이터베이스에 저장 완료")
         else:
-            save_menu_to_render(menu_data)
+            # 로컬 환경에서는 Render 서버와 로컬 모두에 저장
+            if save_menu_to_render(menu_data):
+                print("로컬 환경: Render 서버와 로컬 데이터베이스에 저장 완료")
+            else:
+                print("로컬 환경: 저장 실패")
+                return jsonify({'error': '메뉴 순서 저장에 실패했습니다.'}), 500
         
         print(f"저장된 메뉴 데이터: {menu_data}")
         return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'}), 200
         
     except Exception as e:
         print(f"메뉴 순서 업데이트 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 def sync_image_to_local(image_filename):
