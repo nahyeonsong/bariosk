@@ -1453,7 +1453,9 @@ async function handleCategoryDrop(e) {
 
             try {
                 console.log("서버에 카테고리 순서 저장 시도");
-                const response = await fetch(
+
+                // apiRequest 함수 사용 (재시도 로직 포함)
+                const response = await apiRequest(
                     `${API_BASE_URL}/api/categories/order?t=${timestamp}`,
                     {
                         method: "PUT",
@@ -1465,14 +1467,9 @@ async function handleCategoryDrop(e) {
                             Expires: "0",
                         },
                         body: JSON.stringify({ categories }),
-                    }
+                    },
+                    3 // 최대 3번 재시도
                 );
-
-                if (!response.ok) {
-                    throw new Error(
-                        `카테고리 순서 저장 실패: ${response.status}`
-                    );
-                }
 
                 // 서버 응답 처리
                 try {
