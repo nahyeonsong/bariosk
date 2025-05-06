@@ -1,0 +1,66 @@
+{
+    "coffee": [
+        {
+            "id": 5,
+            "image": "5da2628c-ab53-4eab-80d6-ed0bd3ad2872.jpg",
+            "name": "아메리카노",
+            "price": "2000",
+            "temperature": "H"
+        },
+        {
+            "id": 1,
+            "image": "e954dc77-2879-4e30-9685-4d8ae14a993d.jpg",
+            "name": "아메리카노",
+            "price": "2000",
+            "temperature": "I"
+        },
+        {
+            "id": 2,
+            "image": "15185792-5ecb-435d-90db-dbd67b630206.jpg",
+            "name": "카페라떼",
+            "price": "2500",
+            "temperature": "H"
+        },
+        {
+            "id": 6,
+            "name": "카페라떼",
+            "price": "2500",
+            "image": "c3c86ed4-335c-4a58-b838-126ed2675bfb.jpg",
+            "temperature": "I"
+        },
+        {
+            "id": 7,
+            "name": "돌체라떼",
+            "price": "3000",
+            "image": "logo.png",
+            "temperature": "H"
+        },
+        {
+            "id": 8,
+            "name": "돌체라떼",
+            "price": "3000",
+            "image": "logo.png",
+            "temperature": "I"
+        }
+    ],
+    "non-coffee": [
+        {
+            "id": 3,
+            "image": "88a32db8-87de-4199-81be-c876bea16a85.jpg",
+            "name": "딸기라떼",
+            "price": "3500",
+            "temperature": "I"
+        }
+    ],
+    "signature": [],
+    "dessert": [
+        {
+            "id": 4,
+            "image": "181f048f-a48b-4e4d-a25f-9c9e80289eed.jpg",
+            "name": "휘낭시에",
+            "price": "2000",
+            "temperature": ""
+        }
+    ],
+    "tea": []
+}
