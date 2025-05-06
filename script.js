@@ -47,17 +47,12 @@ console.log("사용할 API URL:", API_BASE_URL);
 let isAdminMode = false;
 let cart = [];
 let menuData = {};
-
-// 드래그 앤 드롭 관련 변수
-let draggedItem = null;
-let dragStartIndex = null;
-
-// 카테고리 드래그 앤 드롭 이벤트 핸들러
 let categoryDraggedItem = null;
 let categoryDragStartIndex = null;
+let menuDraggedItem = null;
 
 // 요청 타임아웃 설정
-const REQUEST_TIMEOUT = 15000; // 15초
+const REQUEST_TIMEOUT = 15000; // 15초로 변경 (기존 30초)
 
 // 로컬 스토리지 키
 const CATEGORY_ORDER_KEY = "bariosk_category_order";
@@ -112,11 +107,13 @@ async function apiRequest(url, options = {}, retries = 2) {
     const startTime = performance.now();
 
     try {
-        // AbortController를 사용하여 타임아웃 설정
+        // AbortController를 사용하여 타임아웃 설정 (30초)
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-        console.log(`API 요청: ${url} (남은 재시도: ${retries})`);
+        console.log(
+            `API 요청: ${url} (남은 재시도: ${retries}, 타임아웃: ${REQUEST_TIMEOUT}ms)`
+        );
 
         const response = await fetch(url, {
             ...options,
@@ -1976,40 +1973,57 @@ async function handleCategoryDrop(e) {
                     JSON.stringify({ categories: categories })
                 );
 
-                // apiRequest 함수 사용 (재시도 및 오류 처리 포함)
-                const orderResponse = await apiRequest(
-                    `${API_BASE_URL}/api/categories/order`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Cache-Control": "no-cache",
-                        },
-                        body: JSON.stringify({ categories: categories }),
-                    }
-                );
+                // apiRequest 함수 사용 (시간 제한 줄임)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초로 타임아웃 제한
 
-                console.log(
-                    "카테고리 순서 저장 응답 상태:",
-                    orderResponse.status
-                );
-
-                if (orderResponse.ok) {
-                    const responseData = await orderResponse.json();
-                    console.log(
-                        "서버에 카테고리 순서 저장 성공:",
-                        responseData
+                try {
+                    const orderResponse = await fetch(
+                        `${API_BASE_URL}/api/categories/order`,
+                        {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Cache-Control": "no-cache",
+                            },
+                            signal: controller.signal,
+                            body: JSON.stringify({ categories: categories }),
+                        }
                     );
-                } else {
-                    const errorText = await orderResponse.text();
-                    console.warn(
-                        "서버에 카테고리 순서 저장 실패:",
-                        orderResponse.status,
-                        errorText
+
+                    clearTimeout(timeoutId);
+
+                    console.log(
+                        "카테고리 순서 저장 응답 상태:",
+                        orderResponse.status
+                    );
+
+                    if (orderResponse.ok) {
+                        const responseData = await orderResponse.json();
+                        console.log(
+                            "서버에 카테고리 순서 저장 성공:",
+                            responseData
+                        );
+                    } else {
+                        const errorText = await orderResponse.text();
+                        console.warn(
+                            "서버에 카테고리 순서 저장 실패:",
+                            orderResponse.status,
+                            errorText
+                        );
+                    }
+                } catch (fetchError) {
+                    clearTimeout(timeoutId);
+                    console.error("카테고리 순서 저장 요청 실패:", fetchError);
+                    console.log(
+                        "카테고리 순서 저장이 실패했지만 다음 단계로 계속 진행합니다"
                     );
                 }
             } catch (orderError) {
                 console.error("카테고리 순서 서버 저장 오류:", orderError);
+                console.log(
+                    "카테고리 순서 저장이 실패했지만 다음 단계로 계속 진행합니다"
+                );
             }
 
             // 서버에 메뉴 데이터 저장 시도 (실패해도 로컬에는 저장됨)
@@ -2040,10 +2054,15 @@ async function handleCategoryDrop(e) {
                     `서버에 메뉴 데이터 저장 시도... API URL: ${API_BASE_URL}/api/menu`
                 );
 
-                // apiRequest 함수 사용 (재시도 및 오류 처리 포함)
-                const response = await apiRequest(
-                    `${API_BASE_URL}/api/menu`,
-                    {
+                // fetch 직접 사용하여 타임아웃 제어
+                const menuController = new AbortController();
+                const menuTimeoutId = setTimeout(
+                    () => menuController.abort(),
+                    10000
+                ); // 10초로 타임아웃 제한
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/menu`, {
                         method: "PUT",
                         headers: {
                             "Content-Type": "application/json",
@@ -2051,47 +2070,56 @@ async function handleCategoryDrop(e) {
                                 "no-cache, no-store, must-revalidate",
                             Pragma: "no-cache",
                         },
+                        signal: menuController.signal,
                         body: JSON.stringify(reorderedMenuData),
-                    },
-                    3 // 3번 재시도
-                );
+                    });
 
-                console.log("메뉴 데이터 저장 응답 상태:", response.status);
+                    clearTimeout(menuTimeoutId);
 
-                if (response.ok) {
-                    const menuResponseData = await response.json();
-                    console.log(
-                        "서버에 메뉴 데이터 저장 성공:",
-                        menuResponseData
-                    );
+                    console.log("메뉴 데이터 저장 응답 상태:", response.status);
 
-                    // 로컬 스토리지에 메뉴 데이터도 캐시
-                    localStorage.setItem(
-                        "bariosk_menu_data",
-                        JSON.stringify(menuData)
-                    );
-                    localStorage.setItem(
-                        "bariosk_menu_data_time",
-                        Date.now().toString()
-                    );
-                    console.log("메뉴 데이터 로컬 스토리지에 캐시 완료");
+                    if (response.ok) {
+                        const menuResponseData = await response.json();
+                        console.log(
+                            "서버에 메뉴 데이터 저장 성공:",
+                            menuResponseData
+                        );
 
-                    alert("카테고리 순서가 변경되었습니다.");
-                    console.log("=== 카테고리 드래그 앤 드롭 처리 완료 ===");
-                } else {
-                    const menuErrorText = await response.text();
-                    console.warn(
-                        "서버 저장 실패, 로컬에만 저장됨:",
-                        response.status,
-                        menuErrorText
-                    );
+                        // 로컬 스토리지에 메뉴 데이터도 캐시
+                        localStorage.setItem(
+                            "bariosk_menu_data",
+                            JSON.stringify(menuData)
+                        );
+                        localStorage.setItem(
+                            "bariosk_menu_data_time",
+                            Date.now().toString()
+                        );
+                        console.log("메뉴 데이터 로컬 스토리지에 캐시 완료");
+
+                        alert("카테고리 순서가 변경되었습니다.");
+                        console.log(
+                            "=== 카테고리 드래그 앤 드롭 처리 완료 ==="
+                        );
+                    } else {
+                        const menuErrorText = await response.text();
+                        console.warn(
+                            "서버 저장 실패, 로컬에만 저장됨:",
+                            response.status,
+                            menuErrorText
+                        );
+                        alert(
+                            "서버 저장에 실패했지만, 현재 화면에는 적용되었습니다."
+                        );
+                    }
+                } catch (serverError) {
+                    console.error("서버 저장 오류:", serverError);
                     alert(
-                        "서버 저장에 실패했지만, 현재 화면에는 적용되었습니다."
+                        "서버 연결 오류! 현재 화면에만 순서가 적용되었습니다."
                     );
                 }
-            } catch (serverError) {
-                console.error("서버 저장 오류:", serverError);
-                alert("서버 연결 오류! 현재 화면에만 순서가 적용되었습니다.");
+            } catch (error) {
+                console.error("카테고리 순서 변경 중 오류:", error);
+                alert("카테고리 순서 변경 중 오류가 발생했습니다.");
             }
         } catch (error) {
             console.error("카테고리 순서 변경 중 오류:", error);
