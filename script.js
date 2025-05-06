@@ -652,60 +652,64 @@ async function loadCategories() {
         const url = `${API_BASE_URL}/api/categories?t=${timestamp}`;
         console.log(`API URL에서 카테고리 목록 로드 시도: ${url}`);
 
-        // 서버에서 카테고리 목록 로드 (캐시 방지 헤더 추가)
-        const response = await apiRequest(
-            url,
-            {
-                headers: {
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    Pragma: "no-cache",
+        // 먼저 로컬 스토리지에서 저장된 카테고리 가져오기
+        const savedCategories = loadCategoryOrderFromLocalStorage();
+        console.log("로컬 스토리지에서 로드한 카테고리:", savedCategories);
+
+        // 서버에서 카테고리 목록 로드 시도
+        let serverCategories = [];
+        try {
+            // 서버에서 카테고리 목록 로드 (캐시 방지 헤더 추가)
+            const response = await apiRequest(
+                url,
+                {
+                    headers: {
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        Pragma: "no-cache",
+                    },
                 },
-            },
-            3
-        ); // 재시도 횟수 증가
+                3
+            ); // 재시도 횟수 증가
 
-        const data = await response.json();
+            const data = await response.json();
 
-        // 새로운 API 응답 형식 확인: { categories: [...], timestamp: ... }
-        let serverCategories = Array.isArray(data)
-            ? data
-            : data.categories || [];
+            // 새로운 API 응답 형식 확인: { categories: [...], timestamp: ... }
+            serverCategories = Array.isArray(data)
+                ? data
+                : data.categories || [];
 
-        // 응답에 추가 정보가 있으면 로깅
-        if (data.timestamp) {
-            console.log(
-                `서버 응답 시간: ${new Date(
-                    data.timestamp * 1000
-                ).toLocaleString()}`
-            );
+            // 응답에 추가 정보가 있으면 로깅
+            if (data.timestamp) {
+                console.log(
+                    `서버 응답 시간: ${new Date(
+                        data.timestamp * 1000
+                    ).toLocaleString()}`
+                );
+            }
+            if (data.server) {
+                console.log(`응답 서버: ${data.server}`);
+            }
+
+            console.log("서버에서 카테고리 목록 로드 응답:", serverCategories);
+        } catch (serverError) {
+            console.error("서버에서 카테고리 로드 실패:", serverError);
+            serverCategories = [];
         }
-        if (data.server) {
-            console.log(`응답 서버: ${data.server}`);
-        }
 
-        console.log("서버에서 카테고리 목록 로드 응답:", serverCategories);
+        // 결과적으로 사용할 카테고리 목록 결정
+        let finalCategories = [];
 
-        // 서버 응답이 유효하면 항상 서버 응답을 우선 사용하고 로컬 스토리지에 저장
+        // 1. 서버에서 받은 카테고리가 있으면 사용
         if (serverCategories && serverCategories.length > 0) {
             console.log("서버 카테고리 목록 사용");
-            // 로컬 스토리지에 백업용으로 저장 (오프라인 모드 대비)
-            saveCategoryOrderToLocalStorage(serverCategories);
-
-            // UI 업데이트
-            updateCategorySelects(serverCategories);
-            renderCategoryList(serverCategories);
-            return serverCategories;
+            finalCategories = [...serverCategories];
         }
+        // 2. 서버 응답이 비어있고 로컬 스토리지에 저장된 것이 있으면 사용
+        else if (savedCategories && savedCategories.length > 0) {
+            console.log("서버 응답이 없어 로컬 스토리지 카테고리 사용");
+            finalCategories = [...savedCategories];
 
-        // 서버 응답이 비어있을 경우에만 로컬 스토리지 사용
-        console.log("서버에서 빈 카테고리 목록이 반환됨");
-        const savedCategories = loadCategoryOrderFromLocalStorage();
-
-        if (savedCategories && savedCategories.length > 0) {
-            // 로컬 스토리지에 저장된 순서가 있으면 사용하고 서버에 동기화 요청
-            console.log("로컬 스토리지에 저장된 카테고리 순서 사용");
-
-            // 서버에 카테고리 순서 동기화 요청 보내기 (백그라운드)
+            // 서버에 카테고리 순서 동기화 요청 (백그라운드)
             try {
                 fetch(`${API_BASE_URL}/api/categories/order`, {
                     method: "PUT",
@@ -714,7 +718,7 @@ async function loadCategories() {
                         "Cache-Control": "no-cache, no-store, must-revalidate",
                         Pragma: "no-cache",
                     },
-                    body: JSON.stringify({ categories: savedCategories }),
+                    body: JSON.stringify({ categories: finalCategories }),
                 })
                     .then((response) => {
                         console.log(
@@ -731,25 +735,33 @@ async function loadCategories() {
             } catch (syncError) {
                 console.warn("카테고리 순서 동기화 요청 실패:", syncError);
             }
-
-            updateCategorySelects(savedCategories);
-            renderCategoryList(savedCategories);
-            return savedCategories;
-        } else if (Object.keys(menuData).length > 0) {
-            // 메뉴 데이터의 카테고리 사용
-            const localCategories = Object.keys(menuData);
-            console.log("로컬 menuData의 카테고리 사용:", localCategories);
-            updateCategorySelects(localCategories);
-            renderCategoryList(localCategories);
-            return localCategories;
-        } else {
-            // 기본 카테고리 설정
-            const defaultCategories = ["기본 카테고리"];
-            console.log("빈 응답으로 기본 카테고리 사용:", defaultCategories);
-            updateCategorySelects(defaultCategories);
-            renderCategoryList(defaultCategories);
-            return defaultCategories;
         }
+        // 3. 서버 응답도 없고 로컬 스토리지도 없지만 메뉴 데이터가 있으면 그 키를 사용
+        else if (Object.keys(menuData).length > 0) {
+            finalCategories = Object.keys(menuData);
+            console.log("로컬 menuData의 카테고리 사용:", finalCategories);
+        }
+        // 4. 아무것도 없으면 기본 카테고리 사용
+        else {
+            finalCategories = ["기본 카테고리"];
+            console.log("기본 카테고리 사용:", finalCategories);
+        }
+
+        // 결정된 카테고리 순서를 로컬 스토리지에 저장 (백업)
+        if (finalCategories.length > 0) {
+            saveCategoryOrderToLocalStorage(finalCategories);
+            console.log(
+                "최종 카테고리 목록을 로컬 스토리지에 저장:",
+                finalCategories
+            );
+        }
+
+        // UI 업데이트
+        updateCategorySelects(finalCategories);
+        renderCategoryList(finalCategories);
+
+        console.log("카테고리 목록 로드 및 렌더링 완료:", finalCategories);
+        return finalCategories;
     } catch (error) {
         console.error("카테고리 목록 로드 중 오류:", error);
 
@@ -1983,53 +1995,50 @@ async function handleCategoryDrop(e) {
             updateMenuDisplay(categories);
             console.log("UI 업데이트 완료");
 
-            // 서버에 카테고리 순서 저장 시도 (단순화된 방식)
+            // 서버에 카테고리 순서 저장 시도 - 더 간단한 방식 사용
+            const apiEndpoint = `${API_BASE_URL}/api/categories/order`;
+            const requestData = { categories: categories };
+
+            console.log(`서버에 카테고리 순서 저장 시도:`);
+            console.log(`- 엔드포인트: ${apiEndpoint}`);
+            console.log(`- 데이터:`, JSON.stringify(requestData));
+
             try {
-                console.log(
-                    `API 엔드포인트: ${API_BASE_URL}/api/categories/order`
-                );
-                console.log(
-                    `전송 데이터:`,
-                    JSON.stringify({ categories: categories })
-                );
+                const response = await fetch(apiEndpoint, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(requestData),
+                });
 
-                // 서버 요청 전송
-                const orderResponse = await fetch(
-                    `${API_BASE_URL}/api/categories/order`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Cache-Control": "no-cache",
-                        },
-                        body: JSON.stringify({ categories: categories }),
-                    }
-                );
+                const statusCode = response.status;
+                console.log(`서버 응답 상태 코드: ${statusCode}`);
 
-                console.log(
-                    "카테고리 순서 서버 저장 응답 상태 코드:",
-                    orderResponse.status
-                );
+                let responseBody = "";
+                try {
+                    responseBody = await response.text();
+                    console.log(`서버 응답 본문: ${responseBody}`);
+                } catch (textError) {
+                    console.warn("응답 텍스트 읽기 실패:", textError);
+                }
 
-                // 응답 텍스트 로깅
-                const responseText = await orderResponse.text();
-                console.log("서버 응답 텍스트:", responseText);
-
-                if (orderResponse.ok) {
-                    console.log(
-                        "카테고리 순서가 성공적으로 서버에 저장되었습니다."
-                    );
+                if (response.ok) {
+                    console.log("카테고리 순서 서버 저장 성공!");
                     alert("카테고리 순서가 변경되었습니다.");
                 } else {
                     console.warn(
-                        "서버에 카테고리 순서 저장 실패, 로컬만 적용됨"
+                        `서버 저장 실패 (${statusCode}): ${responseBody}`
                     );
                     alert(
                         "서버 저장에 실패했지만, 현재 화면에는 적용되었습니다."
                     );
                 }
-            } catch (error) {
-                console.error("카테고리 순서 저장 중 오류:", error);
+            } catch (networkError) {
+                console.error(
+                    "카테고리 순서 저장 네트워크 오류:",
+                    networkError
+                );
                 alert("서버 연결 오류! 현재 화면에만 순서가 적용되었습니다.");
             }
 
