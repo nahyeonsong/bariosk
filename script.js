@@ -625,7 +625,8 @@ async function loadServerData(isInitialLoad = true) {
         if (isInitialLoad) {
             applyLocalCategoryOrder();
         } else {
-            console.log("백그라운드 로드에서는 UI 업데이트 없음");
+            console.log("백그라운드 로드에서도 카테고리 순서 업데이트");
+            applyLocalCategoryOrder(); // 백그라운드 로드에서도 카테고리 순서 적용
         }
     } catch (error) {
         console.error("서버 데이터 로드 중 오류:", error);
@@ -829,6 +830,9 @@ function renderCategoryList(categories) {
     // 관리자 모드일 때만 드래그 가능하도록 설정
     const dragEnabled = isAdminMode;
 
+    console.log("카테고리 목록 렌더링 (관리자 모드: " + isAdminMode + ")");
+    console.log("렌더링할 카테고리 목록:", categories);
+
     categoryList.innerHTML = categories
         .map(
             (category, index) => `
@@ -848,6 +852,7 @@ function renderCategoryList(categories) {
 
     // 드래그 앤 드롭 이벤트 리스너 추가 (관리자 모드일 때만)
     if (dragEnabled) {
+        console.log("관리자 모드: 드래그 앤 드롭 이벤트 리스너 추가");
         const categoryItems = categoryList.querySelectorAll(".category-item");
         categoryItems.forEach((item) => {
             item.addEventListener("dragstart", handleCategoryDragStart);
@@ -856,6 +861,8 @@ function renderCategoryList(categories) {
             item.addEventListener("drop", handleCategoryDrop);
             item.addEventListener("dragend", handleCategoryDragEnd);
         });
+    } else {
+        console.log("사용자 모드: 드래그 앤 드롭 비활성화");
     }
 
     // 카테고리 수정 버튼 이벤트 리스너
@@ -1328,7 +1335,7 @@ function toggleAdminMode() {
 
     // 관리자 모드 상태를 로컬 스토리지에 저장
     localStorage.setItem("bariosk_admin_mode", isAdminMode.toString());
-    console.log("관리자 모드 상태 로컬 스토리지에 저장:", isAdminMode);
+    console.log("관리자 모드 상태 변경:", isAdminMode ? "활성화" : "비활성화");
 
     if (adminPanel) {
         adminPanel.style.display = isAdminMode ? "block" : "none";
@@ -1339,11 +1346,14 @@ function toggleAdminMode() {
         logo.style.padding = isAdminMode ? "2px" : "0";
     }
 
-    // 콘솔에 디버깅 정보 출력
-    console.log("관리자 모드 전환:", isAdminMode ? "활성화" : "비활성화");
-    console.log("현재 menuData 상태:", Object.keys(menuData));
+    // 관리자 모드 전환 시 카테고리 목록 바로 다시 렌더링
+    const savedCategories = loadCategoryOrderFromLocalStorage();
+    if (savedCategories && savedCategories.length > 0) {
+        console.log("관리자 모드 전환 후 카테고리 목록 다시 렌더링");
+        renderCategoryList(savedCategories);
+    }
 
-    // 관리자 모드 전환 시 메뉴 데이터와 카테고리 다시 로드
+    // 메뉴 데이터와 카테고리 다시 로드
     (async () => {
         try {
             // 메뉴 데이터 먼저 로드
@@ -1380,23 +1390,11 @@ function toggleAdminMode() {
 
                 // 카테고리 목록 다시 로드하고 메뉴 표시 업데이트
                 await loadCategoriesAndUpdateDisplay();
-
-                // 카테고리 목록 다시 렌더링 (관리자 모드 반영을 위해)
-                const savedCategories = loadCategoryOrderFromLocalStorage();
-                if (savedCategories && savedCategories.length > 0) {
-                    renderCategoryList(savedCategories);
-                }
             }
         } catch (error) {
             console.error("관리자 모드 전환 중 오류:", error);
             // 오류 발생 시 기존 방식으로 로드
             await loadCategoriesAndUpdateDisplay();
-
-            // 카테고리 목록 다시 렌더링 (관리자 모드 반영을 위해)
-            const savedCategories = loadCategoryOrderFromLocalStorage();
-            if (savedCategories && savedCategories.length > 0) {
-                renderCategoryList(savedCategories);
-            }
         }
     })();
 }
@@ -1938,8 +1936,10 @@ function handleDragEnd() {
 
 // 카테고리 드래그 앤 드롭 이벤트 핸들러
 function handleCategoryDragStart(e) {
+    console.log("카테고리 드래그 시작", this.dataset.category);
     categoryDraggedItem = this;
     categoryDragStartIndex = Array.from(this.parentNode.children).indexOf(this);
+    console.log("카테고리 드래그 시작 위치:", categoryDragStartIndex);
     this.classList.add("dragging");
 }
 
@@ -1961,92 +1961,97 @@ function handleCategoryDragEnd() {
 async function handleCategoryDrop(e) {
     e.preventDefault();
     this.classList.remove("drag-over");
+
+    // 드롭 후 카테고리 순서 인덱스 계산
     const categoryDragEndIndex = Array.from(this.parentNode.children).indexOf(
         this
     );
 
-    if (categoryDragStartIndex !== categoryDragEndIndex) {
+    // 드래그 시작 위치가 없거나 같은 위치면 처리하지 않음
+    if (
+        categoryDragStartIndex === null ||
+        categoryDragStartIndex === categoryDragEndIndex
+    ) {
+        console.log("카테고리 드롭: 위치 변경 없음");
+        return;
+    }
+
+    console.log("=== 카테고리 드래그 앤 드롭 처리 시작 ===");
+    console.log("관리자 모드 상태:", isAdminMode);
+    console.log(
+        `카테고리 순서 변경: ${categoryDragStartIndex}에서 ${categoryDragEndIndex}로`
+    );
+
+    try {
+        // 카테고리 목록 구성
+        const categoryList = document.getElementById("categoryList");
+        const categoryItems = categoryList.querySelectorAll(".category-item");
+        const categories = [];
+
+        // 새 순서로 카테고리 목록 구성
+        categoryItems.forEach((item) => {
+            categories.push(item.dataset.category);
+        });
+
+        console.log(`새 카테고리 순서:`, categories);
+
+        // 로컬 스토리지에 새 순서 즉시 저장
+        saveCategoryOrderToLocalStorage(categories);
+        console.log("로컬 스토리지에 카테고리 순서 저장 완료");
+
+        // UI 즉시 업데이트 (서버 응답 기다리지 않음)
+        updateCategorySelects(categories);
+        updateMenuDisplay(categories);
+
+        // 카테고리 목록 다시 렌더링하여 드래그 앤 드롭 기능 유지
+        renderCategoryList(categories);
+
+        console.log("UI 업데이트 완료");
+
+        // 서버에 카테고리 순서 저장 시도
+        const apiEndpoint = `${API_BASE_URL}/api/categories/order`;
+        const requestData = { categories: categories };
+
+        console.log(`서버에 카테고리 순서 저장 시도:`);
+        console.log(`- 엔드포인트: ${apiEndpoint}`);
+        console.log(`- 데이터:`, JSON.stringify(requestData));
+
         try {
-            console.log("=== 카테고리 드래그 앤 드롭 처리 시작 ===");
-            console.log("관리자 모드 상태:", isAdminMode);
-
-            // 카테고리 목록 구성
-            const categoryList = document.getElementById("categoryList");
-            const categoryItems =
-                categoryList.querySelectorAll(".category-item");
-            const categories = [];
-
-            // 새 순서로 카테고리 목록 구성
-            categoryItems.forEach((item) => {
-                categories.push(item.dataset.category);
+            const response = await fetch(apiEndpoint, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(requestData),
             });
 
-            console.log(
-                `카테고리 순서 변경: ${categoryDragStartIndex}에서 ${categoryDragEndIndex}로`
-            );
-            console.log(`새 카테고리 순서:`, categories);
+            const statusCode = response.status;
+            console.log(`서버 응답 상태 코드: ${statusCode}`);
 
-            // 로컬 스토리지에 새 순서 즉시 저장
-            saveCategoryOrderToLocalStorage(categories);
-            console.log("로컬 스토리지에 카테고리 순서 저장 완료");
-
-            // UI 즉시 업데이트 (서버 응답 기다리지 않음)
-            updateCategorySelects(categories);
-            updateMenuDisplay(categories);
-            console.log("UI 업데이트 완료");
-
-            // 서버에 카테고리 순서 저장 시도 - 더 간단한 방식 사용
-            const apiEndpoint = `${API_BASE_URL}/api/categories/order`;
-            const requestData = { categories: categories };
-
-            console.log(`서버에 카테고리 순서 저장 시도:`);
-            console.log(`- 엔드포인트: ${apiEndpoint}`);
-            console.log(`- 데이터:`, JSON.stringify(requestData));
-
+            let responseBody = "";
             try {
-                const response = await fetch(apiEndpoint, {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(requestData),
-                });
-
-                const statusCode = response.status;
-                console.log(`서버 응답 상태 코드: ${statusCode}`);
-
-                let responseBody = "";
-                try {
-                    responseBody = await response.text();
-                    console.log(`서버 응답 본문: ${responseBody}`);
-                } catch (textError) {
-                    console.warn("응답 텍스트 읽기 실패:", textError);
-                }
-
-                if (response.ok) {
-                    console.log("카테고리 순서 서버 저장 성공!");
-                    alert("카테고리 순서가 변경되었습니다.");
-                } else {
-                    console.warn(
-                        `서버 저장 실패 (${statusCode}): ${responseBody}`
-                    );
-                    alert(
-                        "서버 저장에 실패했지만, 현재 화면에는 적용되었습니다."
-                    );
-                }
-            } catch (networkError) {
-                console.error(
-                    "카테고리 순서 저장 네트워크 오류:",
-                    networkError
-                );
-                alert("서버 연결 오류! 현재 화면에만 순서가 적용되었습니다.");
+                responseBody = await response.text();
+                console.log(`서버 응답 본문: ${responseBody}`);
+            } catch (textError) {
+                console.warn("응답 텍스트 읽기 실패:", textError);
             }
 
-            console.log("=== 카테고리 드래그 앤 드롭 처리 완료 ===");
-        } catch (error) {
-            console.error("카테고리 순서 변경 중 오류:", error);
-            alert("카테고리 순서 변경 중 오류가 발생했습니다.");
+            if (response.ok) {
+                console.log("카테고리 순서 서버 저장 성공!");
+                alert("카테고리 순서가 변경되었습니다.");
+            } else {
+                console.warn(`서버 저장 실패 (${statusCode}): ${responseBody}`);
+                alert("서버 저장에 실패했지만, 현재 화면에는 적용되었습니다.");
+            }
+        } catch (networkError) {
+            console.error("카테고리 순서 저장 네트워크 오류:", networkError);
+            alert("서버 연결 오류! 현재 화면에만 순서가 적용되었습니다.");
         }
+
+        console.log("=== 카테고리 드래그 앤 드롭 처리 완료 ===");
+    } catch (error) {
+        console.error("카테고리 순서 변경 중 오류:", error);
+        alert("카테고리 순서 변경 중 오류가 발생했습니다.");
     }
 }
 
