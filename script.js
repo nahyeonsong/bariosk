@@ -650,7 +650,7 @@ async function loadCategories() {
         console.log("카테고리 목록 로딩 시작");
         // 캐시 방지를 위한 타임스탬프 추가
         const timestamp = new Date().getTime();
-        const url = `${API_BASE_URL}/api/categories?t=${timestamp}`;
+        const url = `${API_BASE_URL}/api/categories/order?t=${timestamp}`;
         console.log(`API URL에서 카테고리 목록 로드 시도: ${url}`);
 
         // 먼저 로컬 스토리지에서 저장된 카테고리 가져오기
@@ -2124,9 +2124,9 @@ async function fetchCategoryOrder() {
         console.log("서버에서 카테고리 순서 조회 시도");
         const timestamp = new Date().getTime();
 
-        // 서버에서 카테고리 목록 조회
+        // 새로운 카테고리 순서 전용 엔드포인트 사용
         const response = await fetch(
-            `${API_BASE_URL}/api/categories?t=${timestamp}`,
+            `${API_BASE_URL}/api/categories/order?t=${timestamp}`,
             {
                 headers: {
                     "Cache-Control": "no-cache, no-store, must-revalidate",
