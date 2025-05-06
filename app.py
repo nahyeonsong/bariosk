@@ -233,6 +233,36 @@ def update_schema(conn):
         print("=== 데이터베이스 스키마 확인 시작 ===")
         cursor = conn.cursor()
         
+        # 테이블 존재 여부 확인
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='category_order'")
+        if not cursor.fetchone():
+            print("category_order 테이블이 존재하지 않아 생성합니다.")
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS category_order (
+                    id INTEGER PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    order_index INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(category)
+                )
+            ''')
+            conn.commit()
+            print("category_order 테이블 생성 완료")
+            
+            # 기존 카테고리 정보를 새 테이블에 추가
+            cursor.execute("SELECT DISTINCT category FROM menu ORDER BY category")
+            categories = cursor.fetchall()
+            
+            for idx, cat in enumerate(categories):
+                category = cat['category']
+                cursor.execute(
+                    "INSERT INTO category_order (category, order_index) VALUES (?, ?)",
+                    (category, idx)
+                )
+            
+            conn.commit()
+            print(f"{len(categories)}개 카테고리를 category_order 테이블에 추가 완료")
+        
         # 현재 테이블의 칼럼 정보 가져오기
         cursor.execute("PRAGMA table_info(menu)")
         columns = cursor.fetchall()
@@ -296,6 +326,9 @@ def ensure_db():
                 conn.close()
                 init_db()
             else:
+                # 테이블은 있지만 스키마 업데이트 확인
+                print("기존 데이터베이스 스키마 업데이트 확인")
+                update_schema(conn)
                 conn.close()
     except Exception as e:
         print(f"데이터베이스 확인 중 오류 발생: {str(e)}")
@@ -1048,8 +1081,8 @@ def add_category():
             # 카테고리 추가 (빈 메뉴 항목 사용)
             cursor.execute("""
                 INSERT INTO menu (category, name, price, image, temperature, order_index)
-                VALUES (?, '대표메뉴', '0', 'logo.png', '', 0)
-            """, (category_name,))
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (category_name, "대표메뉴", "0", "logo.png", "", 0))
             
             # 카테고리 순서 테이블에도 추가
             # 먼저 현재 최대 order_index 조회
@@ -1596,6 +1629,29 @@ def update_category_order():
         print("상세 오류:")
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/db/update-schema', methods=['GET'])
+def api_update_schema():
+    try:
+        print("=== API를 통한 데이터베이스 스키마 업데이트 시작 ===")
+        conn = get_db()
+        update_schema(conn)
+        conn.close()
+        print("=== API를 통한 데이터베이스 스키마 업데이트 완료 ===")
+        return jsonify({
+            'message': '데이터베이스 스키마 업데이트가 완료되었습니다.',
+            'success': True,
+            'timestamp': int(time.time())
+        }), 200
+    except Exception as e:
+        print(f"API 데이터베이스 스키마 업데이트 실패: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({
+            'error': f'데이터베이스 스키마 업데이트 실패: {str(e)}',
+            'success': False,
+            'timestamp': int(time.time())
+        }), 500
 
 # 서버 실행
 if __name__ == '__main__':
