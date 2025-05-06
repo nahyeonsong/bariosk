@@ -1,17 +1,45 @@
 // API 기본 URL 설정
 const API_BASE_URL = getApiBaseUrl();
 
+// 모바일 기기 확인 함수
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+    );
+}
+
+// 네트워크 연결 확인 함수
+function checkNetworkConnection() {
+    return navigator.onLine;
+}
+
 // API 기본 URL 결정 함수
 function getApiBaseUrl() {
     const hostname = window.location.hostname;
     console.log("현재 호스트명:", hostname);
+    console.log("모바일 기기 여부:", isMobileDevice());
+    console.log(
+        "네트워크 연결 상태:",
+        checkNetworkConnection() ? "연결됨" : "연결 안됨"
+    );
 
     // 모든 환경에서 Render 서버 사용 (로컬/Render 데이터 통합)
     const FORCE_RENDER_SERVER = true; // true로 설정하면 모든 환경에서 Render 서버 사용
 
+    // Render 서버 URL
+    const RENDER_SERVER_URL = "https://bariosk.onrender.com";
+
+    // 네트워크 연결이 없는 경우 로컬 스토리지 모드로 변경
+    if (!checkNetworkConnection()) {
+        console.log(
+            "네트워크 연결이 없습니다. 로컬 스토리지 모드로 작동합니다."
+        );
+        return "offline";
+    }
+
     if (FORCE_RENDER_SERVER) {
         console.log("모든 환경에서 Render 서버 사용");
-        return "https://bariosk.onrender.com";
+        return RENDER_SERVER_URL;
     }
 
     // 아래는 환경별 분기 처리 (FORCE_RENDER_SERVER가 false일 때만 사용됨)
@@ -28,17 +56,17 @@ function getApiBaseUrl() {
         hostname.includes(".bariosk.com") ||
         hostname === "nahyeonsong.github.io"
     ) {
-        return "https://bariosk.onrender.com";
+        return RENDER_SERVER_URL;
     }
 
     // 로컬 개발 환경
     if (hostname === "localhost" || hostname === "127.0.0.1") {
         // return "http://localhost:5000"; // 로컬 서버 사용 (기존 코드)
-        return "https://bariosk.onrender.com"; // 로컬 환경에서도 Render 서버 사용
+        return RENDER_SERVER_URL; // 로컬 환경에서도 Render 서버 사용
     }
 
     // 기타 모든 도메인 - Render 서버를 기본값으로 사용
-    return "https://bariosk.onrender.com";
+    return RENDER_SERVER_URL;
 }
 
 console.log("사용할 API URL:", API_BASE_URL);
@@ -106,6 +134,13 @@ function loadCategoryOrderFromLocalStorage() {
 async function apiRequest(url, options = {}, retries = 2) {
     const startTime = performance.now();
 
+    // 오프라인 모드 확인
+    if (!navigator.onLine || API_BASE_URL === "offline") {
+        console.warn("오프라인 모드: 로컬 스토리지에서 데이터 로드 시도");
+        showOfflineNotification();
+        throw new Error("오프라인 모드");
+    }
+
     try {
         // AbortController를 사용하여 타임아웃 설정 (30초)
         const controller = new AbortController();
@@ -120,6 +155,8 @@ async function apiRequest(url, options = {}, retries = 2) {
             signal: controller.signal,
             headers: {
                 "Content-Type": "application/json",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
                 ...options.headers,
             },
         });
@@ -144,6 +181,15 @@ async function apiRequest(url, options = {}, retries = 2) {
         return response;
     } catch (error) {
         const elapsed = performance.now() - startTime;
+
+        // 네트워크 연결 확인
+        if (!navigator.onLine) {
+            console.error(
+                "네트워크 연결이 없습니다. 로컬 데이터를 사용합니다."
+            );
+            showOfflineNotification();
+            throw new Error("네트워크 연결 없음");
+        }
 
         if (error.name === "AbortError") {
             console.error(`요청 시간 초과: ${url} (${elapsed.toFixed(0)}ms)`);
@@ -545,6 +591,11 @@ async function initializeApp() {
 async function loadServerData(isInitialLoad = true) {
     // 타임스탬프 생성 (캐시 방지)
     const timestamp = new Date().getTime();
+    console.log(
+        `loadServerData 호출 (초기 로드: ${isInitialLoad}, 장치: ${
+            isMobileDevice() ? "모바일" : "PC"
+        }, 네트워크: ${navigator.onLine ? "온라인" : "오프라인"})`
+    );
 
     try {
         // 로컬 스토리지에서 카테고리 순서 먼저 로드
@@ -562,6 +613,14 @@ async function loadServerData(isInitialLoad = true) {
             }
         }
 
+        // 네트워크 연결 확인
+        if (!navigator.onLine) {
+            console.warn("오프라인 상태: 로컬 스토리지의 데이터만 사용합니다.");
+            showOfflineNotification();
+            applyLocalCategoryOrder();
+            return;
+        }
+
         // 타임아웃 컨트롤러 설정
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -569,20 +628,32 @@ async function loadServerData(isInitialLoad = true) {
         try {
             // 카테고리 목록과 메뉴 데이터를 병렬로 요청 (시간 단축)
             const [categoriesResponse, menuResponse] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/categories/order?t=${timestamp}`, {
-                    headers: {
-                        "Cache-Control": "no-cache, no-store, must-revalidate",
-                        Pragma: "no-cache",
-                    },
-                    signal: controller.signal,
-                }),
-                fetch(`${API_BASE_URL}/api/menu?t=${timestamp}`, {
-                    headers: {
-                        "Cache-Control": "no-cache, no-store, must-revalidate",
-                        Pragma: "no-cache",
-                    },
-                    signal: controller.signal,
-                }),
+                fetch(
+                    `${API_BASE_URL}/api/categories/order?t=${timestamp}&device=${
+                        isMobileDevice() ? "mobile" : "pc"
+                    }`,
+                    {
+                        headers: {
+                            "Cache-Control":
+                                "no-cache, no-store, must-revalidate",
+                            Pragma: "no-cache",
+                        },
+                        signal: controller.signal,
+                    }
+                ),
+                fetch(
+                    `${API_BASE_URL}/api/menu?t=${timestamp}&device=${
+                        isMobileDevice() ? "mobile" : "pc"
+                    }`,
+                    {
+                        headers: {
+                            "Cache-Control":
+                                "no-cache, no-store, must-revalidate",
+                            Pragma: "no-cache",
+                        },
+                        signal: controller.signal,
+                    }
+                ),
             ]);
 
             // 타임아웃 클리어
@@ -2268,4 +2339,99 @@ async function saveCategoryOrderToServer(categories) {
         console.error("카테고리 순서 저장 네트워크 오류:", error);
         return false;
     }
+}
+
+// 네트워크 상태 변화 감지 리스너
+window.addEventListener("online", function () {
+    console.log("네트워크 연결이 복원되었습니다.");
+    // 네트워크 복원 시 데이터 동기화 시도
+    if (document.readyState === "complete") {
+        synchronizeDataWithServer();
+    }
+});
+
+window.addEventListener("offline", function () {
+    console.log("네트워크 연결이 끊겼습니다. 로컬 데이터를 사용합니다.");
+    // 오프라인 상태 메시지 표시 (선택사항)
+    showOfflineNotification();
+});
+
+// 네트워크 연결이 복원되었을 때 서버와 데이터 동기화
+function synchronizeDataWithServer() {
+    try {
+        console.log("서버와 데이터 동기화 시도 중...");
+
+        // 로컬 스토리지의 카테고리 순서 확인
+        const savedCategories = loadCategoryOrderFromLocalStorage();
+        if (savedCategories && savedCategories.length > 0) {
+            // 카테고리 순서 동기화
+            saveCategoryOrderToServer(savedCategories)
+                .then((result) => {
+                    console.log("카테고리 순서 동기화 결과:", result);
+                    if (result) {
+                        console.log("카테고리 순서 동기화 성공");
+                    }
+                })
+                .catch((err) => {
+                    console.error("카테고리 순서 동기화 실패:", err);
+                });
+        }
+
+        // 다른 데이터 동기화 로직 추가...
+
+        // 다시 데이터 로드
+        setTimeout(() => {
+            loadServerData(true);
+        }, 1000);
+    } catch (error) {
+        console.error("데이터 동기화 중 오류:", error);
+    }
+}
+
+// 오프라인 상태 알림
+function showOfflineNotification() {
+    const notification = document.createElement("div");
+    notification.className = "offline-notification";
+    notification.textContent = "오프라인 모드입니다. 일부 기능이 제한됩니다.";
+
+    // 기존 알림이 있으면 제거
+    const existingNotification = document.querySelector(
+        ".offline-notification"
+    );
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+
+    document.body.appendChild(notification);
+
+    // 5초 후 알림 자동 제거
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// 네트워크 상태 메시지 표시
+function showNetworkMessage(message) {
+    const notification = document.createElement("div");
+    notification.className = "network-notification";
+    notification.textContent = message;
+
+    // 기존 알림이 있으면 제거
+    const existingNotification = document.querySelector(
+        ".network-notification"
+    );
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+
+    document.body.appendChild(notification);
+
+    // 3초 후 알림 자동 제거
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
 }
