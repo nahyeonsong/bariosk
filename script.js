@@ -188,6 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const tabButtons = document.querySelectorAll(".tab-btn");
     const tabContents = document.querySelectorAll(".tab-content");
     const logo = document.getElementById("logo");
+    const clearCartBtn = document.getElementById("clearCartBtn"); // 장바구니 비우기 버튼 참조 추가
     let pressTimer;
 
     // 탭 전환
@@ -416,6 +417,19 @@ document.addEventListener("DOMContentLoaded", () => {
     // 메뉴 아이템에 장바구니 추가 버튼 이벤트 리스너 추가
     addMenuEventListeners();
     updateCart();
+
+    // 장바구니 비우기 버튼 이벤트 리스너 추가
+    clearCartBtn.addEventListener("click", () => {
+        if (cart.length > 0) {
+            if (confirm("장바구니를 비우시겠습니까?")) {
+                cart = [];
+                updateCart();
+                alert("장바구니가 비워졌습니다.");
+            }
+        } else {
+            alert("장바구니가 이미 비어있습니다.");
+        }
+    });
 });
 
 // 앱 초기화 함수
@@ -1593,6 +1607,7 @@ function createMenuItem(item) {
         `
         : "";
 
+    // 담기 버튼에서 직접 onclick 속성을 제거하고 대신 data-id만 설정
     const addToCartButton = !isAdminMode
         ? `<button class="add-to-cart" data-id="${item.id}">담기</button>`
         : "";
@@ -1851,14 +1866,19 @@ document.getElementById("checkoutBtn").addEventListener("click", async () => {
 
 // 메뉴 아이템에 장바구니 추가 버튼 이벤트 리스너 추가
 function addMenuEventListeners() {
-    document.querySelectorAll(".menu-item").forEach((item) => {
-        const addToCartBtn = item.querySelector(".add-to-cart");
-        if (addToCartBtn) {
-            addToCartBtn.addEventListener("click", () => {
-                const menuId = parseInt(item.dataset.id);
-                addToCart(menuId);
-            });
-        }
+    // 기존 이벤트 리스너 제거를 위해 모든 버튼에서 클론 생성 후 교체
+    document.querySelectorAll(".menu-item .add-to-cart").forEach((btn) => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+
+    // 새 이벤트 리스너 추가
+    document.querySelectorAll(".menu-item .add-to-cart").forEach((btn) => {
+        btn.addEventListener("click", function () {
+            const menuId = parseInt(this.getAttribute("data-id"));
+            console.log("장바구니 담기 버튼 클릭:", menuId);
+            addToCart(menuId);
+        });
     });
 }
 
@@ -1965,6 +1985,15 @@ async function handleCategoryDrop(e) {
 
             // 서버에 카테고리 순서 저장 시도 (단순화된 방식)
             try {
+                console.log(
+                    `API 엔드포인트: ${API_BASE_URL}/api/categories/order`
+                );
+                console.log(
+                    `전송 데이터:`,
+                    JSON.stringify({ categories: categories })
+                );
+
+                // 서버 요청 전송
                 const orderResponse = await fetch(
                     `${API_BASE_URL}/api/categories/order`,
                     {
@@ -1978,9 +2007,13 @@ async function handleCategoryDrop(e) {
                 );
 
                 console.log(
-                    "카테고리 순서 서버 저장 응답:",
+                    "카테고리 순서 서버 저장 응답 상태 코드:",
                     orderResponse.status
                 );
+
+                // 응답 텍스트 로깅
+                const responseText = await orderResponse.text();
+                console.log("서버 응답 텍스트:", responseText);
 
                 if (orderResponse.ok) {
                     console.log(
