@@ -427,6 +427,26 @@ async function initializeApp() {
         console.log("앱 초기화 시작");
         const startTime = performance.now(); // 성능 측정 시작
 
+        // 로컬 스토리지에서 관리자 모드 상태 불러오기
+        const savedAdminMode = localStorage.getItem("bariosk_admin_mode");
+        if (savedAdminMode === "true") {
+            isAdminMode = true;
+            console.log("로컬 스토리지에서 관리자 모드 상태 복원: 활성화");
+
+            // 관리자 모드 UI 적용
+            const adminPanel = document.getElementById("adminPanel");
+            const logo = document.getElementById("logo");
+
+            if (adminPanel) {
+                adminPanel.style.display = "block";
+            }
+
+            if (logo) {
+                logo.style.border = "2px solid red";
+                logo.style.padding = "2px";
+            }
+        }
+
         // 로컬 스토리지에서 저장된 카테고리와 메뉴 데이터 먼저 확인
         try {
             // 로컬 스토리지에서 저장된 카테고리 순서 불러오기
@@ -1283,6 +1303,10 @@ function toggleAdminMode() {
     const adminPanel = document.getElementById("adminPanel");
     const logo = document.getElementById("logo");
 
+    // 관리자 모드 상태를 로컬 스토리지에 저장
+    localStorage.setItem("bariosk_admin_mode", isAdminMode.toString());
+    console.log("관리자 모드 상태 로컬 스토리지에 저장:", isAdminMode);
+
     if (adminPanel) {
         adminPanel.style.display = isAdminMode ? "block" : "none";
     }
@@ -1323,6 +1347,9 @@ function toggleAdminMode() {
                 const categories = await loadCategories();
                 console.log("관리자 모드 전환 후 로드된 카테고리:", categories);
 
+                // 카테고리 목록 다시 렌더링 (관리자 모드 반영을 위해)
+                renderCategoryList(categories);
+
                 // 메뉴 표시 업데이트
                 updateMenuDisplay(categories);
             } else {
@@ -1330,11 +1357,23 @@ function toggleAdminMode() {
 
                 // 카테고리 목록 다시 로드하고 메뉴 표시 업데이트
                 await loadCategoriesAndUpdateDisplay();
+
+                // 카테고리 목록 다시 렌더링 (관리자 모드 반영을 위해)
+                const savedCategories = loadCategoryOrderFromLocalStorage();
+                if (savedCategories && savedCategories.length > 0) {
+                    renderCategoryList(savedCategories);
+                }
             }
         } catch (error) {
             console.error("관리자 모드 전환 중 오류:", error);
             // 오류 발생 시 기존 방식으로 로드
             await loadCategoriesAndUpdateDisplay();
+
+            // 카테고리 목록 다시 렌더링 (관리자 모드 반영을 위해)
+            const savedCategories = loadCategoryOrderFromLocalStorage();
+            if (savedCategories && savedCategories.length > 0) {
+                renderCategoryList(savedCategories);
+            }
         }
     })();
 }
@@ -1899,6 +1938,9 @@ async function handleCategoryDrop(e) {
 
     if (categoryDragStartIndex !== categoryDragEndIndex) {
         try {
+            console.log("=== 카테고리 드래그 앤 드롭 처리 시작 ===");
+            console.log("관리자 모드 상태:", isAdminMode);
+
             // 카테고리 목록 구성
             const categoryList = document.getElementById("categoryList");
             const categoryItems =
@@ -1917,10 +1959,58 @@ async function handleCategoryDrop(e) {
 
             // 가장 중요한 부분: 로컬 스토리지에 새 순서 저장
             saveCategoryOrderToLocalStorage(categories);
+            console.log("로컬 스토리지에 카테고리 순서 저장 완료");
 
             // UI 즉시 업데이트 (서버 응답 기다리지 않음)
             updateCategorySelects(categories);
             updateMenuDisplay(categories);
+            console.log("UI 업데이트 완료");
+
+            // 서버에 카테고리 순서 별도 저장 (중요!)
+            try {
+                console.log(
+                    `서버에 카테고리 순서 저장 시도... API URL: ${API_BASE_URL}/api/categories/order`
+                );
+                console.log(
+                    "전송할 데이터:",
+                    JSON.stringify({ categories: categories })
+                );
+
+                // apiRequest 함수 사용 (재시도 및 오류 처리 포함)
+                const orderResponse = await apiRequest(
+                    `${API_BASE_URL}/api/categories/order`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Cache-Control": "no-cache",
+                        },
+                        body: JSON.stringify({ categories: categories }),
+                    }
+                );
+
+                console.log(
+                    "카테고리 순서 저장 응답 상태:",
+                    orderResponse.status
+                );
+
+                if (orderResponse.ok) {
+                    const responseData = await orderResponse.json();
+                    console.log(
+                        "서버에 카테고리 순서 저장 성공:",
+                        responseData
+                    );
+                } else {
+                    const errorText = await orderResponse.text();
+                    console.warn(
+                        "서버에 카테고리 순서 저장 실패:",
+                        orderResponse.status,
+                        errorText
+                    );
+                }
+            } catch (orderError) {
+                console.error("카테고리 순서 서버 저장 오류:", orderError);
+            }
 
             // 서버에 메뉴 데이터 저장 시도 (실패해도 로컬에는 저장됨)
             try {
@@ -1943,20 +2033,37 @@ async function handleCategoryDrop(e) {
 
                 // 메뉴 데이터 로컬 업데이트 (서버 응답 기다리지 않고)
                 menuData = reorderedMenuData;
+                console.log("메뉴 데이터 로컬 업데이트 완료");
 
                 // 서버에 저장 요청
-                console.log("서버에 메뉴 데이터 저장 시도...");
-                const response = await fetch(`${API_BASE_URL}/api/menu`, {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Cache-Control": "no-cache",
+                console.log(
+                    `서버에 메뉴 데이터 저장 시도... API URL: ${API_BASE_URL}/api/menu`
+                );
+
+                // apiRequest 함수 사용 (재시도 및 오류 처리 포함)
+                const response = await apiRequest(
+                    `${API_BASE_URL}/api/menu`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Cache-Control":
+                                "no-cache, no-store, must-revalidate",
+                            Pragma: "no-cache",
+                        },
+                        body: JSON.stringify(reorderedMenuData),
                     },
-                    body: JSON.stringify(reorderedMenuData),
-                });
+                    3 // 3번 재시도
+                );
+
+                console.log("메뉴 데이터 저장 응답 상태:", response.status);
 
                 if (response.ok) {
-                    console.log("서버에 메뉴 데이터 저장 성공");
+                    const menuResponseData = await response.json();
+                    console.log(
+                        "서버에 메뉴 데이터 저장 성공:",
+                        menuResponseData
+                    );
 
                     // 로컬 스토리지에 메뉴 데이터도 캐시
                     localStorage.setItem(
@@ -1967,12 +2074,16 @@ async function handleCategoryDrop(e) {
                         "bariosk_menu_data_time",
                         Date.now().toString()
                     );
+                    console.log("메뉴 데이터 로컬 스토리지에 캐시 완료");
 
                     alert("카테고리 순서가 변경되었습니다.");
+                    console.log("=== 카테고리 드래그 앤 드롭 처리 완료 ===");
                 } else {
+                    const menuErrorText = await response.text();
                     console.warn(
                         "서버 저장 실패, 로컬에만 저장됨:",
-                        response.status
+                        response.status,
+                        menuErrorText
                     );
                     alert(
                         "서버 저장에 실패했지만, 현재 화면에는 적용되었습니다."
