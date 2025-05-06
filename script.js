@@ -1995,7 +1995,7 @@ async function handleCategoryDrop(e) {
 
         [categories[categoryDragStartIndex], categories[categoryDragEndIndex]] =
             [
-                categories[categoryDragStartIndex],
+                categories[categoryDragEndIndex],
                 categories[categoryDragStartIndex],
             ];
         console.log(`새 카테고리 순서:`, categories);
