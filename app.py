@@ -1499,10 +1499,38 @@ def upload_image():
         print(f"이미지 업로드 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/categories/order', methods=['PUT'])
+@app.route('/api/categories/order', methods=['GET', 'PUT'])
 def update_category_order():
     try:
-        print("=== 카테고리 순서 업데이트 시작 ===")
+        print("=== 카테고리 순서 처리 시작 ===")
+        
+        # GET 요청 처리 - 현재 카테고리 순서 반환
+        if request.method == 'GET':
+            print("카테고리 순서 조회 요청")
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            # 카테고리 순서 조회
+            cursor.execute("SELECT category FROM category_order ORDER BY order_index")
+            ordered_categories = [row['category'] for row in cursor.fetchall()]
+            
+            # 순서가 없는 경우 메뉴에서 카테고리 목록 가져오기
+            if not ordered_categories:
+                print("저장된 카테고리 순서가 없어 메뉴에서 카테고리 목록 가져오기")
+                cursor.execute("SELECT DISTINCT category FROM menu")
+                ordered_categories = [row['category'] for row in cursor.fetchall()]
+            
+            conn.close()
+            
+            print(f"반환할 카테고리 순서: {ordered_categories}")
+            
+            return jsonify({
+                'categories': ordered_categories,
+                'server': 'Render',
+                'timestamp': int(time.time())
+            }), 200
+        
+        # PUT 요청 처리 - 카테고리 순서 업데이트
         data = request.get_json()
         
         if not data or 'categories' not in data:
@@ -1528,7 +1556,7 @@ def update_category_order():
             # 기존 카테고리 정보 조회
             cursor.execute("SELECT category FROM category_order ORDER BY order_index")
             existing_categories = [row['category'] for row in cursor.fetchall()]
-            print(f"기존 카테고리 목록: {existing_categories}")
+            print(f"기존 카테고리 순서: {existing_categories}")
             
             # 모든 카테고리 순서 초기화
             cursor.execute("DELETE FROM category_order")
@@ -1624,7 +1652,7 @@ def update_category_order():
             return jsonify({'error': f'카테고리 순서 업데이트 실패: {str(db_error)}'}), 500
         
     except Exception as e:
-        print(f"카테고리 순서 업데이트 중 오류 발생: {str(e)}")
+        print(f"카테고리 순서 처리 중 오류 발생: {str(e)}")
         import traceback
         print("상세 오류:")
         print(traceback.format_exc())

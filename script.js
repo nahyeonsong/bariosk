@@ -2008,44 +2008,42 @@ async function handleCategoryDrop(e) {
 
         console.log("UI 업데이트 완료");
 
-        // 서버에 카테고리 순서 저장 시도
-        const apiEndpoint = `${API_BASE_URL}/api/categories/order`;
-        const requestData = { categories: categories };
+        // 서버에 카테고리 순서 저장
+        const serverSaveResult = await saveCategoryOrderToServer(categories);
 
-        console.log(`서버에 카테고리 순서 저장 시도:`);
-        console.log(`- 엔드포인트: ${apiEndpoint}`);
-        console.log(`- 데이터:`, JSON.stringify(requestData));
+        if (serverSaveResult) {
+            console.log("카테고리 순서가 서버에 성공적으로 저장되었습니다.");
+            alert("카테고리 순서가 변경되었습니다.");
 
-        try {
-            const response = await fetch(apiEndpoint, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(requestData),
-            });
-
-            const statusCode = response.status;
-            console.log(`서버 응답 상태 코드: ${statusCode}`);
-
-            let responseBody = "";
+            // 서버에서 최신 카테고리 목록 다시 가져오기
             try {
-                responseBody = await response.text();
-                console.log(`서버 응답 본문: ${responseBody}`);
-            } catch (textError) {
-                console.warn("응답 텍스트 읽기 실패:", textError);
-            }
+                const serverCategories = await fetchCategoryOrder();
+                if (serverCategories && serverCategories.length > 0) {
+                    console.log(
+                        "서버에서 최신 카테고리 순서 가져옴:",
+                        serverCategories
+                    );
 
-            if (response.ok) {
-                console.log("카테고리 순서 서버 저장 성공!");
-                alert("카테고리 순서가 변경되었습니다.");
-            } else {
-                console.warn(`서버 저장 실패 (${statusCode}): ${responseBody}`);
-                alert("서버 저장에 실패했지만, 현재 화면에는 적용되었습니다.");
+                    // 서버와 로컬 순서가 다른 경우에만 UI 업데이트
+                    if (
+                        JSON.stringify(serverCategories) !==
+                        JSON.stringify(categories)
+                    ) {
+                        console.log(
+                            "서버 카테고리 순서가 로컬과 다름, UI 업데이트"
+                        );
+                        saveCategoryOrderToLocalStorage(serverCategories);
+                        updateCategorySelects(serverCategories);
+                        updateMenuDisplay(serverCategories);
+                        renderCategoryList(serverCategories);
+                    }
+                }
+            } catch (refreshError) {
+                console.warn("최신 카테고리 순서 가져오기 실패:", refreshError);
             }
-        } catch (networkError) {
-            console.error("카테고리 순서 저장 네트워크 오류:", networkError);
-            alert("서버 연결 오류! 현재 화면에만 순서가 적용되었습니다.");
+        } else {
+            console.warn("서버 저장 실패, 로컬만 적용됨");
+            alert("서버 저장에 실패했지만, 현재 화면에는 적용되었습니다.");
         }
 
         console.log("=== 카테고리 드래그 앤 드롭 처리 완료 ===");
@@ -2117,5 +2115,105 @@ function applyLocalCategoryOrder() {
     } else {
         console.log("로컬 스토리지에 저장된 카테고리 순서 없음");
         return null;
+    }
+}
+
+// 서버에서 카테고리 순서 조회
+async function fetchCategoryOrder() {
+    try {
+        console.log("서버에서 카테고리 순서 조회 시도");
+        const timestamp = new Date().getTime();
+
+        // 서버에서 카테고리 목록 조회
+        const response = await fetch(
+            `${API_BASE_URL}/api/categories?t=${timestamp}`,
+            {
+                headers: {
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    Pragma: "no-cache",
+                },
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`서버 응답 오류: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("서버 응답 데이터:", data);
+
+        // 새로운 API 응답 형식 처리
+        const categories = Array.isArray(data) ? data : data.categories || [];
+        console.log("서버에서 가져온 카테고리 순서:", categories);
+
+        return categories;
+    } catch (error) {
+        console.error("카테고리 순서 조회 중 오류:", error);
+        // 로컬 스토리지에서 복구 시도
+        const savedCategories = loadCategoryOrderFromLocalStorage();
+        console.log("로컬 스토리지에서 복구한 카테고리 순서:", savedCategories);
+        return savedCategories || [];
+    }
+}
+
+// 서버에 카테고리 순서 저장
+async function saveCategoryOrderToServer(categories) {
+    console.log("서버에 카테고리 순서 저장 시도:", categories);
+
+    if (!categories || categories.length === 0) {
+        console.error("저장할 카테고리가 없습니다.");
+        return false;
+    }
+
+    try {
+        const apiEndpoint = `${API_BASE_URL}/api/categories/order`;
+        const requestData = { categories: categories };
+
+        console.log(`API 엔드포인트: ${apiEndpoint}`);
+        console.log(`전송 데이터:`, JSON.stringify(requestData));
+
+        // 서버에 PUT 요청 전송
+        const response = await fetch(apiEndpoint, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Cache-Control": "no-cache",
+            },
+            body: JSON.stringify(requestData),
+        });
+
+        const statusCode = response.status;
+        console.log(`서버 응답 상태 코드: ${statusCode}`);
+
+        // 응답 처리
+        let responseText = "";
+        let responseJson = null;
+
+        try {
+            responseText = await response.text();
+            console.log(`서버 응답 텍스트:`, responseText);
+
+            if (responseText) {
+                try {
+                    responseJson = JSON.parse(responseText);
+                    console.log("응답 JSON:", responseJson);
+                } catch (jsonError) {
+                    console.warn("JSON 파싱 실패:", jsonError);
+                }
+            }
+        } catch (textError) {
+            console.warn("응답 텍스트 읽기 실패:", textError);
+        }
+
+        if (response.ok) {
+            console.log("카테고리 순서 서버 저장 성공!");
+            return true;
+        } else {
+            console.warn(`서버 저장 실패 (${statusCode}): ${responseText}`);
+            return false;
+        }
+    } catch (error) {
+        console.error("카테고리 순서 저장 네트워크 오류:", error);
+        return false;
     }
 }
