@@ -1987,12 +1987,12 @@ async function handleCategoryDrop(e) {
         const categoryList = document.getElementById("categoryList");
         const categoryItems = categoryList.querySelectorAll(".category-item");
         const categories = [];
-        /*
+
         // 새 순서로 카테고리 목록 구성
         categoryItems.forEach((item) => {
             categories.push(item.dataset.category);
         });
-        */
+
         [categories[categoryDragStartIndex], categories[categoryDragEndIndex]] =
             [
                 categories[categoryDragStartIndex],
