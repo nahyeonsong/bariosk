@@ -1993,6 +1993,11 @@ async function handleCategoryDrop(e) {
             categories.push(item.dataset.category);
         });
 
+        [categories[categoryDragStartIndex], categories[categoryDragEndIndex]] =
+            [
+                categories[categoryDragEndIndex],
+                categories[categoryDragStartIndex],
+            ];
         console.log(`새 카테고리 순서:`, categories);
 
         // 로컬 스토리지에 새 순서 즉시 저장
