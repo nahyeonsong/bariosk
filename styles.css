@@ -76,7 +76,7 @@ main {
     padding: 0 1rem;
 }
 
-.menu-container {
+.menuContainer {
     display: flex;
     flex-direction: column;
     gap: 2rem;
