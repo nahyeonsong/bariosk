@@ -568,8 +568,7 @@ async function initializeApp() {
         // 캐시 데이터가 유효하지 않거나 없으면 서버에서 데이터 로드
         await loadServerData(true);
         console.log("앱 초기화 완료:", performance.now() - startTime, "ms");
-        updateMenuDisplay(savedCategories)
-        
+        updateMenuDisplay(serverCategories)
         // 초기화 완료 후 로컬 카테고리 ve순서 명시적 적용
         applyLocalCategoryOrder();
     } catch (error) {
