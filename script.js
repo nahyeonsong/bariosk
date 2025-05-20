@@ -568,7 +568,17 @@ async function initializeApp() {
         // 캐시 데이터가 유효하지 않거나 없으면 서버에서 데이터 로드
         await loadServerData(true);
         console.log("앱 초기화 완료:", performance.now() - startTime, "ms");
-        updateMenuDisplay()
+        updateMenuDisplay(serverCategories)
+        updateCategorySelects(serverCategories)
+        renderCategoryList(serverCategories)
+        // 초기화 완료 후 로컬 카테고리 순서 명시적 적용
+        applyLocalCategoryOrder();
+    } catch (error) {
+        console.error("앱 초기화 중 오류:", error);
+        // 오류 발생 시 기존 로드 메서드로 복구 시도
+        try {
+    
+
 
         // 초기화 완료 후 로컬 카테고리 순서 명시적 적용
         applyLocalCategoryOrder();
@@ -579,6 +589,7 @@ async function initializeApp() {
             await loadCategories();
             await loadMenuData();
             updateMenuDisplay();
+            
 
             // 복구 후에도 로컬 카테고리 순서 적용 시도
             applyLocalCategoryOrder();
@@ -586,7 +597,7 @@ async function initializeApp() {
             console.error("복구 시도 실패:", fallbackError);
         }
     }
-}
+}}
 
 // 서버에서 데이터 로드 함수 (초기화 시와 백그라운드 업데이트에 모두 사용)
 async function loadServerData(isInitialLoad = true) {

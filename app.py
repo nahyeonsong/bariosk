@@ -1700,7 +1700,7 @@ if __name__ == '__main__':
         print("데이터베이스 초기화 완료")
         
         # 서버 실행
-        port = int(os.environ.get('PORT', 5000))
+        port = int(os.environ.get('PORT', 5001))
         print(f"서버 시작: 포트 {port}")
         
         # 디버그 모드로 실행
