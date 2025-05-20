@@ -568,6 +568,7 @@ async function initializeApp() {
         // 캐시 데이터가 유효하지 않거나 없으면 서버에서 데이터 로드
         await loadServerData(true);
         console.log("앱 초기화 완료:", performance.now() - startTime, "ms");
+        updateMenuDisplay()
 
         // 초기화 완료 후 로컬 카테고리 순서 명시적 적용
         applyLocalCategoryOrder();
@@ -1271,10 +1272,8 @@ async function loadCategoriesAndUpdateDisplay() {
 // 메뉴 표시 업데이트 - 카테고리 순서 문제 해결을 위해 전면 수정
 function updateMenuDisplay(sortedCategories = null) {
     const menuContainer = document.getElementById("menuContainer");
-    if (!menuContainer) {
-        console.error("menuContainer element not found");
-        return;
-    }
+
+    console.log('debuginginigggg')
 
     // 디버깅 정보 출력
     console.log("메뉴 표시 업데이트 호출됨 (관리자 모드:", isAdminMode, ")");
