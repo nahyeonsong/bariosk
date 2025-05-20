@@ -569,8 +569,8 @@ async function initializeApp() {
         await loadServerData(true);
         console.log("앱 초기화 완료:", performance.now() - startTime, "ms");
         saveCategoryOrderToLocalStorage(
-            serrCategories)
-        pdateMenuDisplay()
+            serverCategories)
+        updateMenuDisplay()
         updateCategorySelects(serverCategories)
         renderCategoryList(serverCategories)
         
