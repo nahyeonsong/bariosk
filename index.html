@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta property="og:title" content="바리오스크" />
+        <meta property="og:description" content="바리오스크 카페 메뉴" />
+        <meta
+            property="og:image"
+            content="https://bariosk.onrender.com/api/images/logo.png"
+        />
+        <meta property="og:image:width" content="800" />
+        <meta property="og:image:height" content="400" />
+        <meta property="og:url" content="" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <title>바리오스크</title>
+        <link rel="stylesheet" href="styles.css" />
+        <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+        <script>
+            // API 기본 URL 결정 함수
+            function getApiBaseUrl() {
+                const hostname = window.location.hostname;
+                console.log("HTML - 현재 호스트명:", hostname);
+
+                // 모든 환경에서 Render 서버 사용
+                const FORCE_RENDER_SERVER = true;
+
+                if (FORCE_RENDER_SERVER) {
+                    console.log("HTML - 모든 환경에서 Render 서버 사용");
+                    return "https://bariosk.onrender.com";
+                }
+
+                // Render 호스팅 도메인
+                if (hostname === "bariosk.onrender.com") {
+                    return window.location.origin;
+                }
+
+                // 다른 도메인(커스텀 도메인 포함)
+                if (
+                    hostname === "www.bariosk.com" ||
+                    hostname === "bariosk.com" ||
+                    hostname.includes(".bariosk.com") ||
+                    hostname === "nahyeonsong.github.io"
+                ) {
+                    return "https://bariosk.onrender.com";
+                }
+
+                // 로컬 개발 환경
+                if (hostname === "localhost" || hostname === "127.0.0.1") {
+                    // 로컬 환경에서도 Render 서버 사용
+                    return "https://bariosk.onrender.com";
+                }
+
+                // 기타 모든 도메인
+                return "https://bariosk.onrender.com";
+            }
+
+            // 현재 URL을 OG 태그에 설정하고 이미지 경로 수정
+            document.addEventListener("DOMContentLoaded", function () {
+                const apiBaseUrl = getApiBaseUrl();
+                console.log("HTML에서 결정된 API URL:", apiBaseUrl);
+
+                // og:url 메타 태그 업데이트
+                const ogUrlMeta = document.querySelector(
+                    'meta[property="og:url"]'
+                );
+                if (ogUrlMeta) {
+                    ogUrlMeta.setAttribute("content", window.location.href);
+                }
+
+                // og:image 메타 태그 업데이트 - 항상 Render 서버의 이미지 사용
+                const ogImageMeta = document.querySelector(
+                    'meta[property="og:image"]'
+                );
+                if (ogImageMeta) {
+                    ogImageMeta.setAttribute(
+                        "content",
+                        "https://bariosk.onrender.com/api/images/logo.png"
+                    );
+                }
+
+                // 로고 이미지 소스 업데이트
+                const logo = document.getElementById("logo");
+                if (logo) {
+                    logo.src = apiBaseUrl + "/api/images/logo.png";
+                }
+            });
+        </script>
+    </head>
+    <body>
+        <header>
+            <div class="header-content">
+                <div class="logo-container">
+                    <img
+                        src="https://bariosk.onrender.com/api/images/logo.png"
+                        alt="Bariosk Logo"
+                        class="logo"
+                        id="logo"
+                    />
+                    <h1>Bariosk</h1>
+                </div>
+                <div class="header-right">
+                    <div class="cart-section">
+                        <h2>장바구니</h2>
+                        <div id="cartItems"></div>
+                        <div class="cart-total">
+                            <span>총 금액:</span>
+                            <span id="totalAmount">0원</span>
+                        </div>
+                        <div class="cart-buttons">
+                            <button
+                                id="checkoutBtn"
+                                class="checkout-btn"
+                                disabled
+                            >
+                                주문서 출력
+                            </button>
+                            <button id="clearCartBtn" class="clear-cart-btn">
+                                장바구니 비우기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="menuContainer" id="menuContainer">
+                <!-- 메뉴 섹션들이 여기에 동적으로 추가됩니다 -->
+            </div>
+
+            <div id="adminPanel" class="admin-panel" style="display: none">
+                <div class="admin-tabs">
+                    <button class="tab-btn active" data-tab="menu">
+                        메뉴 관리
+                    </button>
+                    <button class="tab-btn" data-tab="category">
+                        카테고리 관리
+                    </button>
+                </div>
+
+                <div id="menuTab" class="tab-content active">
+                    <div class="menu-section">
+                        <h2>메뉴 관리</h2>
+                        <div class="menu-grid" id="menuGrid">
+                            <!-- 메뉴 항목들이 여기에 동적으로 추가됩니다 -->
+                        </div>
+                    </div>
+
+                    <form id="addMenuForm">
+                        <div class="form-group">
+                            <label for="category">카테고리</label>
+                            <select id="category" name="category" required>
+                                <!-- 카테고리 옵션들은 동적으로 생성될 것입니다 -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="name">메뉴 이름</label>
+                            <input type="text" id="name" name="name" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="temperature">온도</label>
+                            <select id="temperature" name="temperature">
+                                <option value="">선택 안함</option>
+                                <option value="H">Hot</option>
+                                <option value="I">Ice</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="price">가격</label>
+                            <input
+                                type="number"
+                                id="price"
+                                name="price"
+                                required
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="image">이미지</label>
+                            <input
+                                type="file"
+                                id="image"
+                                name="image"
+                                accept="image/*"
+                            />
+                        </div>
+                        <button type="submit">메뉴 추가</button>
+                    </form>
+
+                    <form id="editMenuForm" style="display: none">
+                        <input type="hidden" name="menuId" id="editMenuId" />
+                        <div class="form-group">
+                            <label for="editCategory">카테고리</label>
+                            <select id="editCategory" name="category" required>
+                                <!-- 카테고리 옵션들은 동적으로 생성될 것입니다 -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editName">메뉴 이름</label>
+                            <input
+                                type="text"
+                                id="editName"
+                                name="name"
+                                required
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="editTemperature">온도</label>
+                            <select id="editTemperature" name="temperature">
+                                <option value="">선택 안함</option>
+                                <option value="H">Hot</option>
+                                <option value="I">Ice</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editPrice">가격</label>
+                            <input
+                                type="number"
+                                id="editPrice"
+                                name="price"
+                                required
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="editImage">이미지</label>
+                            <input
+                                type="file"
+                                id="editImage"
+                                name="image"
+                                accept="image/*"
+                            />
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit">메뉴 수정</button>
+                            <button type="button" id="cancelEdit">취소</button>
+                            <button
+                                type="button"
+                                id="deleteMenu"
+                                class="delete-btn"
+                            >
+                                메뉴 삭제
+                            </button>
+                            <button
+                                type="button"
+                                id="cloneMenu"
+                                class="clone-btn"
+                            >
+                                메뉴 복제
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="categoryTab" class="tab-content">
+                    <h2>카테고리 관리</h2>
+                    <form id="addCategoryForm">
+                        <div class="form-group">
+                            <label for="newCategoryName"
+                                >새 카테고리 이름</label
+                            >
+                            <input
+                                type="text"
+                                id="newCategoryName"
+                                name="name"
+                                required
+                            />
+                        </div>
+                        <button type="submit">카테고리 추가</button>
+                    </form>
+
+                    <div class="category-list">
+                        <h3>현재 카테고리</h3>
+                        <ul id="categoryList">
+                            <!-- 카테고리 목록은 동적으로 생성될 것입니다 -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <script src="script.js"></script>
+    </body>
+</html>

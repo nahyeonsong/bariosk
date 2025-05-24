@@ -1,0 +1,776 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Noto Sans KR", sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f5f5f5;
+}
+
+header {
+    background-color: #fff;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.header-right {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #333;
+}
+
+.admin-toggle {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.admin-toggle:hover {
+    background-color: #45a049;
+}
+
+.admin-toggle-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.admin-toggle-btn:hover {
+    background-color: #45a049;
+}
+
+main {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.menuContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.menu-section {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+}
+
+.menu-section h2 {
+    font-size: 1.5rem;
+    color: #333;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #eee;
+}
+
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.menu-item {
+    background-color: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+    cursor: move;
+    position: relative;
+}
+
+.menu-item:hover {
+    transform: translateY(-5px);
+}
+
+.menu-item img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+}
+
+.menu-item-info {
+    padding: 1rem;
+}
+
+.menu-item-info h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.2rem;
+}
+
+.menu-item-info p {
+    margin: 0 0 1rem 0;
+    color: #666;
+}
+
+.menu-item h3 {
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.menu-item p {
+    color: #666;
+    font-weight: bold;
+}
+
+.edit-menu-btn {
+    background-color: #2196f3;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    width: 100%;
+}
+
+.edit-menu-btn:hover {
+    background-color: #1976d2;
+}
+
+#editMenuForm {
+    display: none;
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#editMenuForm h2 {
+    margin-bottom: 1.5rem;
+    color: #333;
+}
+
+#editMenuForm .form-group {
+    margin-bottom: 1rem;
+}
+
+#editMenuForm label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #666;
+}
+
+#editMenuForm input,
+#editMenuForm select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+#editMenuForm button[type="submit"] {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    margin-right: 0.5rem;
+}
+
+#editMenuForm button[type="submit"]:hover {
+    background-color: #45a049;
+}
+
+#cancelEdit {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+#cancelEdit:hover {
+    background-color: #d32f2f;
+}
+
+.admin-panel {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-top: 2rem;
+}
+
+.admin-panel h2 {
+    margin-bottom: 1.5rem;
+    color: #333;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+button[type="submit"] {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    margin-top: 1rem;
+}
+
+button[type="submit"]:hover {
+    background-color: #45a049;
+}
+
+.admin-tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1rem;
+}
+
+.tab-btn {
+    padding: 0.5rem 1rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: #666;
+    transition: color 0.3s;
+}
+
+.tab-btn.active {
+    color: #4caf50;
+    font-weight: bold;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.category-list {
+    margin-top: 2rem;
+}
+
+.category-list h3 {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+#categoryList {
+    list-style: none;
+}
+
+#categoryList li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+    background-color: #fff;
+}
+
+#categoryList li:last-child {
+    border-bottom: none;
+}
+
+.category-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem;
+    border-bottom: 1px solid #eee;
+    background-color: #fff;
+    transition: background-color 0.2s ease;
+    cursor: grab;
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.category-item:last-child {
+    border-bottom: none;
+}
+
+.category-item.dragging {
+    opacity: 0.4;
+    border: 2px dashed #4caf50;
+}
+
+.category-item.drag-over {
+    border: 2px dashed #2196f3;
+    background-color: #f0f8ff;
+}
+
+.category-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.drag-handle {
+    color: #999;
+    cursor: grab;
+    font-size: 16px;
+    padding: 0 5px;
+}
+
+.category-name {
+    font-weight: 500;
+    flex: 1;
+}
+
+.category-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.category-actions button {
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.edit-category {
+    background-color: #4caf50;
+    color: white;
+}
+
+.delete-category {
+    background-color: #f44336;
+    color: white;
+}
+
+.edit-category:hover {
+    background-color: #3d8b40;
+}
+
+.delete-category:hover {
+    background-color: #d32f2f;
+}
+
+.edit-category-input {
+    padding: 0.3rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+    margin-right: 10px;
+}
+
+.edit-buttons {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+.save-category,
+.cancel-edit {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.save-category {
+    background-color: #4caf50;
+    color: white;
+}
+
+.cancel-edit {
+    background-color: #f44336;
+    color: white;
+}
+
+.cart-section {
+    background-color: #fff;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    min-width: 250px;
+}
+
+.cart-section h2 {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+#cartItems {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+}
+
+.cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.cart-item:last-child {
+    border-bottom: none;
+}
+
+.cart-item-info {
+    flex: 1;
+}
+
+.cart-item-name {
+    font-weight: 500;
+}
+
+.cart-item-price {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.cart-item-quantity {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cart-item-quantity span {
+    min-width: 2rem;
+    text-align: center;
+}
+
+.quantity-btn {
+    background-color: #f0f0f0;
+    border: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.quantity-btn:hover {
+    background-color: #e0e0e0;
+}
+
+.cart-total {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    margin: 1rem 0;
+}
+
+.checkout-btn {
+    width: 100%;
+    padding: 0.5rem;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.checkout-btn:hover {
+    background: #45a049;
+}
+
+.checkout-btn:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+}
+
+/* 주문서 스타일 */
+.receipt {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 0 1rem rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.receipt-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.receipt-items {
+    margin-bottom: 1rem;
+}
+
+.receipt-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.receipt-total {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    border-top: 2px solid #eee;
+    padding-top: 1rem;
+    margin-top: 1rem;
+}
+
+.receipt-footer {
+    text-align: center;
+    margin-top: 2rem;
+    color: #666;
+}
+
+.add-to-cart {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    width: 100%;
+}
+
+.add-to-cart:hover {
+    background-color: #45a049;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logo {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.form-actions button {
+    flex: 1;
+    padding: 0.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s;
+}
+
+.form-actions button[type="submit"] {
+    background-color: #4caf50;
+    color: white;
+}
+
+.form-actions button[type="submit"]:hover {
+    background-color: #45a049;
+}
+
+.form-actions #cancelEdit {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.form-actions #cancelEdit:hover {
+    background-color: #e0e0e0;
+}
+
+.form-actions .delete-btn {
+    background-color: #f44336;
+    color: white;
+}
+
+.form-actions .delete-btn:hover {
+    background-color: #d32f2f;
+}
+
+.menu-item.dragging {
+    opacity: 0.5;
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.menu-item.drag-over {
+    border: 2px dashed #4caf50;
+}
+
+.menu-item .drag-handle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 24px;
+    height: 24px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: move;
+    z-index: 1;
+}
+
+.menu-item .drag-handle::before {
+    content: "⋮⋮";
+    color: #666;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.admin-controls {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+.admin-controls button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s;
+}
+
+.edit-btn {
+    background-color: #4caf50;
+    color: white;
+}
+
+.clone-btn {
+    background-color: #2196f3;
+    color: white;
+}
+
+.delete-btn {
+    background-color: #f44336;
+    color: white;
+}
+
+.admin-controls button:hover {
+    opacity: 0.8;
+}
+
+/* 오프라인 알림 스타일 */
+.offline-notification {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: #f44336;
+    color: white;
+    text-align: center;
+    padding: 12px;
+    z-index: 1000;
+    font-weight: bold;
+    animation: slideDown 0.5s ease-out;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+/* 네트워크 상태 메시지 스타일 */
+.network-notification {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    z-index: 1000;
+    font-size: 14px;
+    max-width: 80%;
+    text-align: center;
+    animation: fadeIn 0.3s, fadeOut 0.3s 2.7s;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
