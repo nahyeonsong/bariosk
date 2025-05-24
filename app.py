@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import os
 import json
@@ -12,28 +12,53 @@ from datetime import datetime
 import shutil
 import requests
 import time
+from urllib.parse import urlparse
 
-app = Flask(__name__, static_folder='static')
-# CORS 설정 - 모든 도메인에서의 요청 허용
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
+
+# CORS 설정
+CORS(app, 
+    resources={
+        r"/*": {
+            "origins": ["http://localhost:5173", "http://localhost:3000", "https://bariosk.onrender.com", "https://www.bariosk.com"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+            "expose_headers": ["Content-Type", "X-CSRFToken"],
+            "max_age": 3600
+        }
+    }
+)
+
+# 모든 응답에 CORS 헤더 추가
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin:
+        response.headers['Access-Control-Allow-Origin'] = origin
+    else:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept, Origin'
+    response.headers['Access-Control-Expose-Headers'] = 'Content-Type, X-CSRFToken'
+    response.headers['Access-Control-Max-Age'] = '3600'
+    
+    # 캐시 방지 헤더 추가
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    
+    # 보안 헤더 추가
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    
+    return response
 
 # 설정
 UPLOAD_FOLDER = os.path.join('static', 'images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# 기본 경로에 액세스 헤더 설정 추가
-@app.after_request
-def add_cors_headers(response):
-    # 이미 설정된 헤더인지 확인 후 추가
-    if 'Access-Control-Allow-Origin' not in response.headers:
-        response.headers.add('Access-Control-Allow-Origin', '*')
-    if 'Access-Control-Allow-Headers' not in response.headers:
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Cache-Control,Pragma,Expires')
-    if 'Access-Control-Allow-Methods' not in response.headers:
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    if 'Access-Control-Allow-Credentials' not in response.headers:
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
 
 # 데이터베이스 파일 경로 설정
 if os.environ.get('RENDER'):
@@ -140,6 +165,16 @@ def init_db():
                     image TEXT NOT NULL,
                     temperature TEXT,
                     order_index INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+        # 이미지 테이블 생성
+        conn.execute('''
+                CREATE TABLE IF NOT EXISTS images (
+                    filename TEXT PRIMARY KEY,
+                    data BLOB NOT NULL,
+                    content_type TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -530,11 +565,6 @@ def allowed_file(filename):
 
 def save_image(file):
     try:
-        # 디렉토리가 없으면 생성
-        if not os.path.exists(app.config['UPLOAD_FOLDER']):
-            print(f"이미지 디렉토리 생성: {app.config['UPLOAD_FOLDER']}")
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-        
         # 파일 데이터를 메모리에 로드
         file_data = file.read()
         if not file_data:
@@ -556,30 +586,29 @@ def save_image(file):
         max_size = (800, 800)
         img.thumbnail(max_size, Image.LANCZOS)
         
+        # 이미지를 JPEG로 변환
+        output = io.BytesIO()
+        img.save(output, format='JPEG', quality=85, optimize=True, progressive=True)
+        image_data = output.getvalue()
+        
         # 고유한 파일명 생성
         unique_filename = f"{uuid.uuid4()}.jpg"
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         
-        # 이미지 저장 (최적화 옵션 추가)
-        img.save(filepath, 'JPEG', quality=85, optimize=True, progressive=True)
-        print(f"이미지 저장 성공: {filepath}")
+        # 데이터베이스에 이미지 저장
+        conn = get_db()
+        try:
+            conn.execute(
+                'INSERT OR REPLACE INTO images (filename, data, content_type) VALUES (?, ?, ?)',
+                (unique_filename, image_data, 'image/jpeg')
+            )
+            conn.commit()
+            print(f"이미지 저장 성공: {unique_filename}")
+        except Exception as e:
+            print(f"이미지 데이터베이스 저장 실패: {str(e)}")
+            raise
+        finally:
+            conn.close()
         
-        # 저장된 파일이 실제로 존재하는지 확인
-        if not os.path.exists(filepath):
-            raise ValueError("이미지 파일이 저장되지 않았습니다.")
-        
-        # Render 서버에 이미지 전송
-        if not os.environ.get('RENDER'):
-            try:
-                # 이미지 파일을 다시 열어서 전송
-                with open(filepath, 'rb') as img_file:
-                    files = {'image': (unique_filename, img_file, 'image/jpeg')}
-                    response = requests.post(f"{RENDER_API_URL}/api/upload-image", files=files)
-                    if response.status_code != 200:
-                        print(f"Render 서버에 이미지 전송 실패: {response.status_code}")
-            except Exception as e:
-                print(f"Render 서버에 이미지 전송 중 오류 발생: {str(e)}")
-            
         return unique_filename
         
     except Exception as e:
@@ -609,7 +638,22 @@ def get_menu_from_render():
     except Exception as e:
         print(f"Render 서버 연결 실패: {str(e)}")
         return {}
-
+    
+@app.route('/api/images-list')
+def images_list():
+    try:
+        print("이미지 목록 조회 시작")
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT filename FROM images')
+        files = [row[0] for row in cursor.fetchall()]
+        print(f"조회된 이미지 목록: {files}")
+        conn.close()
+        return jsonify(files)
+    except Exception as e:
+        print(f"이미지 목록 조회 실패: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    
 def save_menu_to_render(data):
     try:
         print(f"Render 서버에 저장할 데이터: {json.dumps(data, ensure_ascii=False)[:500]}...")
@@ -749,9 +793,8 @@ def add_menu():
                 file = request.files['image']
                 if file and file.filename:
                     try:
-                        filename = secure_filename(file.filename)
-                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                        image = filename
+                        # save_image 함수를 사용하여 이미지 저장
+                        image = save_image(file)
                     except Exception as img_error:
                         print(f"이미지 저장 중 오류 발생: {str(img_error)}")
                         # 이미지 저장 실패 시 기본 이미지 사용
@@ -819,9 +862,12 @@ def update_menu(menu_id, category):
             if 'image' in request.files:
                 file = request.files['image']
                 if file and file.filename:
-                    filename = secure_filename(file.filename)
-                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                    image = filename
+                    try:
+                        # save_image 함수를 사용하여 이미지 저장
+                        image = save_image(file)
+                    except Exception as img_error:
+                        print(f"이미지 저장 중 오류 발생: {str(img_error)}")
+                        # 이미지 저장 실패 시 기존 이미지 유지
             
             # 메뉴 정보 업데이트
             update_fields = []
@@ -889,25 +935,258 @@ def delete_menu(menu_id):
         if 'conn' in locals():
             conn.close()
 
-@app.route('/static/images/<filename>')
-def serve_image(filename):
+def create_default_image(filename, text=""):
     try:
-        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if not os.path.exists(image_path):
-            print(f"이미지 파일을 찾을 수 없음: {filename}")
-            # 기본 이미지 경로
-            default_image = os.path.join(app.config['UPLOAD_FOLDER'], 'logo.png')
-            if os.path.exists(default_image):
-                print(f"기본 이미지 사용: logo.png")
-                return send_from_directory(app.config['UPLOAD_FOLDER'], 'logo.png')
-            else:
-                # 기본 이미지가 없으면 생성
-                create_default_logo()
-                return send_from_directory(app.config['UPLOAD_FOLDER'], 'logo.png')
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        print(f"기본 이미지 생성 시작: {filename}")
+        # 300x300 크기의 회색 배경 이미지 생성
+        img = Image.new('RGB', (300, 300), color='#EEEEEE')
+        
+        # 텍스트 추가 (있는 경우)
+        if text:
+            from PIL import ImageDraw, ImageFont
+            draw = ImageDraw.Draw(img)
+            # 기본 폰트 사용
+            try:
+                font_size = 40
+                font = ImageFont.truetype("Arial", font_size)
+            except:
+                font = ImageFont.load_default()
+            
+            # 텍스트 크기 측정
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            # 텍스트를 이미지 중앙에 배치
+            x = (300 - text_width) / 2
+            y = (300 - text_height) / 2
+            draw.text((x, y), text, font=font, fill='#666666')
+        
+        # 이미지를 JPEG로 변환
+        output = io.BytesIO()
+        img.save(output, format='JPEG', quality=85, optimize=True)
+        image_data = output.getvalue()
+        
+        # 데이터베이스에 저장
+        conn = get_db()
+        try:
+            conn.execute(
+                'INSERT OR REPLACE INTO images (filename, data, content_type) VALUES (?, ?, ?)',
+                (filename, image_data, 'image/jpeg')
+            )
+            conn.commit()
+            print(f"이미지 저장 성공: {filename}")
+        except Exception as e:
+            print(f"이미지 데이터베이스 저장 실패: {str(e)}")
+            raise
+        finally:
+            conn.close()
+        
+        return filename
+        
     except Exception as e:
-        print(f"이미지 서빙 중 오류 발생: {str(e)}")
-        return jsonify({'error': '이미지를 찾을 수 없습니다.'}), 404
+        print(f"이미지 저장 실패: {str(e)}")
+        return "logo.png"
+
+@app.route('/api/images/<filename>', methods=['GET', 'OPTIONS'])
+def serve_image(filename):
+    print(f"\n=== 이미지 요청 시작: {filename} ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"요청 URL: {request.url}")
+    print(f"요청 헤더: {dict(request.headers)}")
+    
+    if request.method == 'OPTIONS':
+        print("OPTIONS 요청 처리")
+        response = app.make_default_options_response()
+        return response
+
+    try:
+        print(f"이미지 파일 요청: {filename}")
+        
+        # 데이터베이스 연결 확인
+        conn = get_db()
+        if not conn:
+            error_msg = "데이터베이스 연결 실패"
+            print(error_msg)
+            return jsonify({'error': error_msg}), 500
+            
+        cursor = conn.cursor()
+        print("데이터베이스 연결 성공")
+        
+        try:
+            # 이미지 조회
+            cursor.execute('SELECT data, content_type FROM images WHERE filename = ?', (filename,))
+            result = cursor.fetchone()
+            
+            if result and result['data']:
+                print(f"이미지 찾음: {filename}, 데이터 크기: {len(result['data'])} bytes")
+                
+                # 이미지 데이터 검증
+                try:
+                    img = Image.open(io.BytesIO(result['data']))
+                    print(f"이미지 포맷: {img.format}, 크기: {img.size}")
+                    
+                    # 이미지 데이터를 다시 바이트로 변환
+                    img_byte_arr = io.BytesIO()
+                    img.save(img_byte_arr, format=img.format if img.format else 'JPEG', quality=85, optimize=True)
+                    img_byte_arr.seek(0)
+                    
+                    response = send_file(
+                        img_byte_arr,
+                        mimetype=result['content_type'],
+                        as_attachment=False,
+                        download_name=filename,
+                        conditional=True
+                    )
+                    
+                    # CORS 및 보안 헤더 설정
+                    origin = request.headers.get('Origin')
+                    if origin:
+                        response.headers['Access-Control-Allow-Origin'] = origin
+                    else:
+                        response.headers['Access-Control-Allow-Origin'] = '*'
+                    
+                    response.headers.update({
+                        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin',
+                        'Access-Control-Max-Age': '3600',
+                        'X-Content-Type-Options': 'nosniff',
+                        'Cache-Control': 'public, max-age=31536000',
+                        'Pragma': 'cache',
+                        'Expires': 'Thu, 31 Dec 2037 23:55:55 GMT',
+                        'Referrer-Policy': 'no-referrer'
+                    })
+                    
+                    print(f"이미지 전송 완료: {filename}")
+                    return response
+                    
+                except Exception as img_error:
+                    print(f"이미지 처리 중 오류: {str(img_error)}")
+                    print("기본 이미지 생성 시도")
+                    return create_and_serve_default_image(filename)
+            else:
+                print(f"이미지를 찾을 수 없음: {filename}, 기본 이미지 생성")
+                return create_and_serve_default_image(filename)
+                
+        except Exception as e:
+            print(f"데이터베이스 쿼리 실패: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
+            print("데이터베이스 연결 종료")
+            
+    except Exception as e:
+        print(f"이미지 처리 중 오류 발생: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+    finally:
+        print(f"=== 이미지 요청 종료: {filename} ===\n")
+
+def create_and_serve_default_image(filename):
+    """기본 이미지를 생성하고 서빙하는 함수"""
+    try:
+        print(f"\n=== 기본 이미지 생성 시작: {filename} ===")
+        # 기본 이미지 생성 (회색 배경의 200x200 이미지)
+        img = Image.new('RGB', (200, 200), color='#CCCCCC')
+        
+        # 텍스트 추가
+        try:
+            from PIL import ImageDraw, ImageFont
+            draw = ImageDraw.Draw(img)
+            
+            # 기본 폰트 사용
+            try:
+                font_size = 20
+                font = ImageFont.truetype("Arial", font_size)
+            except:
+                print("Arial 폰트 로드 실패, 기본 폰트 사용")
+                font = ImageFont.load_default()
+            
+            # 파일명을 텍스트로 추가
+            text = filename.split('.')[0]  # 확장자 제거
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            # 텍스트를 이미지 중앙에 배치
+            x = (200 - text_width) / 2
+            y = (200 - text_height) / 2
+            draw.text((x, y), text, font=font, fill='#666666')
+            print("텍스트 추가 완료")
+            
+        except Exception as text_error:
+            print(f"텍스트 추가 실패: {str(text_error)}")
+        
+        # 이미지를 JPEG로 변환
+        output = io.BytesIO()
+        img.save(output, format='JPEG', quality=85, optimize=True)
+        image_data = output.getvalue()
+        print(f"이미지 변환 완료: {len(image_data)} bytes")
+        
+        # 데이터베이스에 이미지 저장
+        conn = get_db()
+        try:
+            # 새 이미지 저장
+            conn.execute(
+                'INSERT OR REPLACE INTO images (filename, data, content_type) VALUES (?, ?, ?)',
+                (filename, image_data, 'image/jpeg')
+            )
+            conn.commit()
+            print(f"기본 이미지 데이터베이스 저장 완료: {filename}")
+            
+            # 이미지 서빙
+            img_io = io.BytesIO(image_data)
+            img_io.seek(0)
+            
+            response = send_file(
+                img_io,
+                mimetype='image/jpeg',
+                as_attachment=False,
+                download_name=filename,
+                conditional=True
+            )
+            
+            # CORS 및 보안 헤더 설정
+            origin = request.headers.get('Origin')
+            if origin:
+                response.headers['Access-Control-Allow-Origin'] = origin
+            else:
+                response.headers['Access-Control-Allow-Origin'] = '*'
+            
+            response.headers.update({
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin',
+                'Access-Control-Max-Age': '3600',
+                'X-Content-Type-Options': 'nosniff',
+                'Cache-Control': 'public, max-age=31536000',
+                'Pragma': 'cache',
+                'Expires': 'Thu, 31 Dec 2037 23:55:55 GMT',
+                'Referrer-Policy': 'no-referrer'
+            })
+            
+            print(f"기본 이미지 전송 준비 완료: {filename}")
+            return response
+            
+        except Exception as db_error:
+            print(f"기본 이미지 데이터베이스 저장 실패: {str(db_error)}")
+            import traceback
+            print("상세 오류:")
+            print(traceback.format_exc())
+            return jsonify({'error': '이미지를 생성할 수 없습니다.'}), 500
+        finally:
+            conn.close()
+            print("데이터베이스 연결 종료")
+            
+    except Exception as e:
+        print(f"기본 이미지 생성 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
+        return jsonify({'error': '이미지를 생성할 수 없습니다.'}), 500
+    finally:
+        print(f"=== 기본 이미지 생성 종료: {filename} ===\n")
 
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
@@ -1458,26 +1737,72 @@ def sync_image_to_local(image_filename):
 
 def create_default_logo():
     try:
-        # 기본 이미지 디렉토리 확인 및 생성
-        if not os.path.exists(app.config['UPLOAD_FOLDER']):
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-        
-        # 기본 이미지 경로
-        logo_path = os.path.join(app.config['UPLOAD_FOLDER'], 'logo.png')
-        
-        # 이미지가 이미 존재하는지 확인
-        if os.path.exists(logo_path):
-            print("기본 로고 이미지가 이미 존재합니다.")
-            return
-        
+        print("기본 로고 이미지 생성 시작")
         # 기본 이미지 생성 (회색 배경의 200x200 이미지)
         img = Image.new('RGB', (200, 200), color='#CCCCCC')
         
-        # 이미지 저장
-        img.save(logo_path, 'PNG')
-        print(f"기본 로고 이미지 생성 완료: {logo_path}")
+        # 이미지를 JPEG로 변환
+        output = io.BytesIO()
+        img.save(output, format='JPEG', quality=85, optimize=True, progressive=True)
+        image_data = output.getvalue()
+        
+        # 데이터베이스에 이미지 저장
+        conn = get_db()
+        try:
+            # 기존 이미지 삭제
+            conn.execute('DELETE FROM images WHERE filename = ?', ('logo.png',))
+            
+            # 새 이미지 저장
+            conn.execute(
+                'INSERT INTO images (filename, data, content_type) VALUES (?, ?, ?)',
+                ('logo.png', image_data, 'image/jpeg')
+            )
+            conn.commit()
+            print("기본 로고 이미지 생성 및 저장 완료")
+            
+            # 저장 확인
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM images WHERE filename = ?', ('logo.png',))
+            count = cursor.fetchone()[0]
+            print(f"저장된 로고 이미지 수: {count}")
+            
+        except Exception as e:
+            print(f"기본 로고 이미지 저장 실패: {str(e)}")
+            raise
+        finally:
+            conn.close()
+            
     except Exception as e:
         print(f"기본 로고 이미지 생성 실패: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
+        raise
+
+# 서버 시작 시 기본 로고 이미지 생성 확인
+def ensure_default_logo():
+    try:
+        print("기본 로고 이미지 확인 시작")
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # 로고 이미지 존재 여부 확인
+        cursor.execute('SELECT COUNT(*) FROM images WHERE filename = ?', ('logo.png',))
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            print("기본 로고 이미지가 없어 생성합니다.")
+            create_default_logo()
+        else:
+            print("기본 로고 이미지가 이미 존재합니다.")
+            
+    except Exception as e:
+        print(f"기본 로고 이미지 확인 중 오류: {str(e)}")
+        import traceback
+        print("상세 오류:")
+        print(traceback.format_exc())
+    finally:
+        conn.close()
 
 @app.route('/api/upload-image', methods=['POST'])
 def upload_image():
@@ -1592,7 +1917,7 @@ def update_category_order():
             if not is_sync_request:
                 try:
                     # 모든 환경에서 명시적으로 동기화 서버 URL 지정
-                    sync_servers = ["https://bariosk.onrender.com", "http://localhost:5000", "https://www.bariosk.com"]
+                    sync_servers = ["https://bariosk.onrender.com", "http://localhost:3000", "https://www.bariosk.com"]
                     current_host = request.host_url.rstrip('/')
                     
                     print(f"현재 호스트: {current_host}")
@@ -1681,33 +2006,176 @@ def api_update_schema():
             'timestamp': int(time.time())
         }), 500
 
+@app.route('/api/add-logo', methods=['POST'])
+def add_logo():
+    try:
+        print("로고 이미지 추가 시작")
+        if 'image' not in request.files:
+            return jsonify({'error': '이미지 파일이 필요합니다.'}), 400
+            
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'error': '선택된 파일이 없습니다.'}), 400
+            
+        if file and allowed_file(file.filename):
+            try:
+                # 파일 데이터를 메모리에 로드
+                file_data = file.read()
+                if not file_data:
+                    return jsonify({'error': '파일 데이터가 비어있습니다.'}), 400
+                
+                # 데이터베이스에 저장
+                conn = get_db()
+                try:
+                    # 기존 로고 삭제
+                    conn.execute('DELETE FROM images WHERE filename = ?', ('logo.png',))
+                    
+                    # 새 로고 저장
+                    conn.execute(
+                        'INSERT INTO images (filename, data, content_type) VALUES (?, ?, ?)',
+                        ('logo.png', file_data, file.content_type or 'image/jpeg')
+                    )
+                    conn.commit()
+                    print("새 로고 이미지 저장 완료")
+                    return jsonify({'message': '로고가 성공적으로 추가되었습니다.'}), 200
+                except Exception as e:
+                    print(f"데이터베이스 저장 실패: {str(e)}")
+                    return jsonify({'error': '데이터베이스 저장 실패'}), 500
+                finally:
+                    conn.close()
+            except Exception as e:
+                print(f"파일 처리 실패: {str(e)}")
+                return jsonify({'error': '파일 처리 실패'}), 500
+        return jsonify({'error': '허용되지 않는 파일 형식입니다.'}), 400
+    except Exception as e:
+        print(f"로고 추가 중 오류 발생: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/upload.html')
+def serve_upload_page():
+    return send_from_directory('.', 'upload.html')
+
+@app.route('/favicon.ico')
+def favicon():
+    try:
+        # 데이터베이스에서 로고 이미지 가져오기
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT data FROM images WHERE filename = ?', ('logo.png',))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result and result['data']:
+            # 로고 이미지를 PIL Image로 변환
+            img = Image.open(io.BytesIO(result['data']))
+            # 32x32 크기로 리사이즈
+            img = img.resize((32, 32), Image.LANCZOS)
+            # ICO 형식으로 변환
+            ico_output = io.BytesIO()
+            img.save(ico_output, format='ICO', sizes=[(32, 32)])
+            ico_output.seek(0)
+            
+            return send_file(
+                ico_output,
+                mimetype='image/x-icon'
+            )
+    except Exception as e:
+        print(f"Favicon 생성 실패: {str(e)}")
+    
+    # 오류 발생 시 빈 favicon 반환
+    img = Image.new('RGB', (32, 32), color='#CCCCCC')
+    output = io.BytesIO()
+    img.save(output, format='ICO', sizes=[(32, 32)])
+    output.seek(0)
+    return send_file(output, mimetype='image/x-icon')
+
+def ensure_menu_images():
+    try:
+        print("\n=== 메뉴 이미지 확인 시작 ===")
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # 메뉴에서 사용되는 모든 이미지 파일명 수집
+        cursor.execute('SELECT DISTINCT image FROM menu WHERE image IS NOT NULL')
+        menu_images = [row['image'] for row in cursor.fetchall()]
+        print(f"메뉴에서 사용되는 이미지: {menu_images}")
+        
+        # 현재 저장된 이미지 확인
+        cursor.execute('SELECT filename FROM images')
+        existing_images = [row['filename'] for row in cursor.fetchall()]
+        print(f"현재 저장된 이미지: {existing_images}")
+        
+        # 없는 이미지 생성
+        for image_name in menu_images:
+            if image_name not in existing_images:
+                print(f"이미지 생성 시도: {image_name}")
+                menu_name = image_name.split('.')[0]
+                if create_default_image(image_name, menu_name):
+                    print(f"이미지 생성 성공: {image_name}")
+                else:
+                    print(f"이미지 생성 실패: {image_name}")
+        
+        print("=== 메뉴 이미지 확인 완료 ===\n")
+    except Exception as e:
+        print(f"메뉴 이미지 확인 중 오류: {str(e)}")
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 # 서버 실행
 if __name__ == '__main__':
     try:
-        print("서버 시작 준비 중...")
+        print("=== 서버 시작 준비 중... ===")
+        
+        # 현재 작업 디렉토리 출력
+        print(f"현재 작업 디렉토리: {os.getcwd()}")
         
         # 디렉토리 생성
-        if not os.path.exists(UPLOAD_FOLDER):
-            os.makedirs(UPLOAD_FOLDER)
-            print(f"업로드 디렉토리 생성: {UPLOAD_FOLDER}")
-        
-        # 기본 로고 이미지 생성
-        create_default_logo()
-        print("기본 로고 이미지 생성 완료")
+        try:
+            if not os.path.exists(UPLOAD_FOLDER):
+                os.makedirs(UPLOAD_FOLDER)
+                print(f"업로드 디렉토리 생성: {UPLOAD_FOLDER}")
+            else:
+                print(f"업로드 디렉토리 이미 존재: {UPLOAD_FOLDER}")
+        except Exception as e:
+            print(f"업로드 디렉토리 생성 실패: {str(e)}")
+            raise
         
         # 데이터베이스 초기화
-        init_db()
-        print("데이터베이스 초기화 완료")
+        try:
+            init_db()
+            print("데이터베이스 초기화 완료")
+        except Exception as e:
+            print(f"데이터베이스 초기화 실패: {str(e)}")
+            raise
         
+        # 기본 로고 이미지 확인 및 생성
+        try:
+            ensure_default_logo()
+            print("기본 로고 이미지 확인 완료")
+        except Exception as e:
+            print(f"기본 로고 이미지 확인 실패: {str(e)}")
+            raise
+            
+        # 메뉴 이미지 확인 및 생성
+        try:
+            ensure_menu_images()
+            print("메뉴 이미지 확인 완료")
+        except Exception as e:
+            print(f"메뉴 이미지 확인 실패: {str(e)}")
+            raise
+
         # 서버 실행
-        port = int(os.environ.get('PORT', 5001))
-        print(f"서버 시작: 포트 {port}")
+        port = int(os.environ.get('PORT', 3000))
+        print(f"=== 서버 시작: 포트 {port} ===")
         
         # 디버그 모드로 실행
         app.run(debug=True, host='0.0.0.0', port=port)
     except Exception as e:
-        print(f"서버 시작 실패: {str(e)}")
+        print(f"=== 서버 시작 실패 ===")
+        print(f"오류 메시지: {str(e)}")
         import traceback
         print("상세 오류:")
         print(traceback.format_exc())
         raise 
+

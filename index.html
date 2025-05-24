@@ -7,7 +7,7 @@
         <meta property="og:description" content="바리오스크 카페 메뉴" />
         <meta
             property="og:image"
-            content="https://bariosk.onrender.com/static/images/logo.png"
+            content="https://bariosk.onrender.com/api/images/logo.png"
         />
         <meta property="og:image:width" content="800" />
         <meta property="og:image:height" content="400" />
@@ -76,14 +76,14 @@
                 if (ogImageMeta) {
                     ogImageMeta.setAttribute(
                         "content",
-                        "https://bariosk.onrender.com/static/images/logo.png"
+                        "https://bariosk.onrender.com/api/images/logo.png"
                     );
                 }
 
                 // 로고 이미지 소스 업데이트
                 const logo = document.getElementById("logo");
                 if (logo) {
-                    logo.src = apiBaseUrl + "/static/images/logo.png";
+                    logo.src = apiBaseUrl + "/api/images/logo.png";
                 }
             });
         </script>
@@ -93,7 +93,7 @@
             <div class="header-content">
                 <div class="logo-container">
                     <img
-                        src="https://bariosk.onrender.com/static/images/logo.png"
+                        src="https://bariosk.onrender.com/api/images/logo.png"
                         alt="Bariosk Logo"
                         class="logo"
                         id="logo"

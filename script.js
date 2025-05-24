@@ -61,7 +61,7 @@ function getApiBaseUrl() {
 
     // 로컬 개발 환경
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-        // return "http://localhost:5000"; // 로컬 서버 사용 (기존 코드)
+        // return "http://localhost:3000"; // 로컬 서버 사용 (기존 코드)
         return RENDER_SERVER_URL; // 로컬 환경에서도 Render 서버 사용
     }
 
@@ -484,24 +484,22 @@ async function initializeApp() {
         console.log("앱 초기화 시작");
         const startTime = performance.now(); // 성능 측정 시작
 
-        // 로컬 스토리지에서 관리자 모드 상태 불러오기
-        const savedAdminMode = localStorage.getItem("bariosk_admin_mode");
-        if (savedAdminMode === "true") {
-            isAdminMode = true;
-            console.log("로컬 스토리지에서 관리자 모드 상태 복원: 활성화");
+        // 관리자 모드 상태 초기화 (항상 일반 모드로 시작)
+        isAdminMode = false;
+        localStorage.setItem("bariosk_admin_mode", "false");
+        console.log("관리자 모드 상태 초기화: 비활성화");
 
-            // 관리자 모드 UI 적용
-            const adminPanel = document.getElementById("adminPanel");
-            const logo = document.getElementById("logo");
+        // 관리자 모드 UI 초기화
+        const adminPanel = document.getElementById("adminPanel");
+        const logo = document.getElementById("logo");
 
-            if (adminPanel) {
-                adminPanel.style.display = "block";
-            }
+        if (adminPanel) {
+            adminPanel.style.display = "none";
+        }
 
-            if (logo) {
-                logo.style.border = "2px solid red";
-                logo.style.padding = "2px";
-            }
+        if (logo) {
+            logo.style.border = "none";
+            logo.style.padding = "0";
         }
 
         // 로컬 스토리지에서 저장된 카테고리와 메뉴 데이터 먼저 확인
@@ -1556,7 +1554,7 @@ async function cloneMenuItem(item, category) {
         if (item.image) {
             try {
                 const imageResponse = await fetch(
-                    `${API_BASE_URL}/static/images/${item.image}`
+                    `${API_BASE_URL}/api/images/${item.image}`
                 );
                 const imageBlob = await imageResponse.blob();
                 formData.append("image", imageBlob, "image.jpg");
@@ -1735,11 +1733,10 @@ function createMenuItem(item) {
         : "";
 
     menuItem.innerHTML = `
-        <img src="${API_BASE_URL}/static/images/${
-        item.image || "logo.png"
-    }" alt="${
-        item.name
-    }" onerror="this.src='${API_BASE_URL}/static/images/logo.png'">
+        <img src="${API_BASE_URL}/api/images/${item.image || "logo.png"}" 
+             alt="${item.name}" 
+             class="menu-image" 
+             onerror="this.onerror=null; this.src='${API_BASE_URL}/api/images/logo.png';" />
         <div class="menu-info">
             <h3>${item.name}</h3>
             <p class="price">${item.price.toLocaleString()}원</p>
@@ -2419,7 +2416,7 @@ function showOfflineNotification() {
         if (notification.parentNode) {
             notification.remove();
         }
-    }, 5000);
+    }, 3000);
 }
 
 // 네트워크 상태 메시지 표시
