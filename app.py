@@ -141,66 +141,6 @@ def after_request(response):
 UPLOAD_FOLDER = os.path.join('static', 'images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# 데이터베이스 파일 경로 설정
-if os.environ.get('RENDER'):
-    try:
-        # Render 환경 - 영구 디스크 스토리지 사용
-        RENDER_DISK_PATH = os.environ.get('RENDER_DISK_PATH', '/data')
-        print(f"Render 디스크 경로: {RENDER_DISK_PATH}")
-        
-        # 디렉토리 생성 시도
-        try:
-            if not os.path.exists(RENDER_DISK_PATH):
-                os.makedirs(RENDER_DISK_PATH)
-                print(f"Render 디스크 디렉토리 생성 성공: {RENDER_DISK_PATH}")
-        except Exception as e:
-            print(f"Render 디스크 디렉토리 생성 실패: {str(e)}")
-            # 대체 경로 사용
-            RENDER_DISK_PATH = '/tmp'
-            if not os.path.exists(RENDER_DISK_PATH):
-                os.makedirs(RENDER_DISK_PATH)
-            print(f"대체 디스크 경로 사용: {RENDER_DISK_PATH}")
-        
-        # 데이터베이스 폴더 생성
-        DB_FOLDER = os.path.join(RENDER_DISK_PATH, 'db')
-        if not os.path.exists(DB_FOLDER):
-            os.makedirs(DB_FOLDER)
-            print(f"데이터베이스 폴더 생성: {DB_FOLDER}")
-        
-        DATABASE = os.path.join(DB_FOLDER, 'menu.db')
-        print(f"Render 환경 감지됨. 데이터베이스 경로: {DATABASE}")
-        print(f"Render 디스크 경로 존재 여부: {os.path.exists(RENDER_DISK_PATH)}")
-        print(f"데이터베이스 파일 경로 존재 여부: {os.path.exists(DATABASE)}")
-        
-        # 디렉토리 권한 확인 및 설정
-        try:
-            if os.path.exists(DB_FOLDER):
-                os.chmod(DB_FOLDER, 0o777)  # 모든 사용자에게 쓰기 권한 부여
-                print(f"데이터베이스 폴더 권한 설정: {DB_FOLDER}")
-            if os.path.exists(RENDER_DISK_PATH):
-                os.chmod(RENDER_DISK_PATH, 0o777)
-                print(f"Render 디스크 경로 권한 설정: {RENDER_DISK_PATH}")
-        except Exception as e:
-            print(f"권한 설정 실패: {str(e)}")
-    except Exception as e:
-        print(f"Render 환경 설정 중 오류 발생: {str(e)}")
-        import traceback
-        print("상세 오류:")
-        print(traceback.format_exc())
-        raise
-else:
-    # 로컬 환경
-    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-        print(f"로컬 데이터 디렉토리 생성: {data_dir}")
-    DATABASE = os.path.join(data_dir, 'menu.db')
-    print(f"로컬 환경 감지됨. 데이터베이스 경로: {DATABASE}")
-    
-    # Render API URL 설정
-    RENDER_API_URL = "https://bariosk.onrender.com"  # Render 서버 URL
-    print(f"로컬 환경 감지됨. Render API URL: {RENDER_API_URL}")
-
 MENU_FILE = 'menu_data.json'
 
 # 파일 기반 메뉴 데이터 로딩/저장 함수
@@ -547,26 +487,13 @@ def save_menu_data(data):
         if not isinstance(data, dict):
             raise ValueError("메뉴 데이터가 올바른 형식이 아닙니다.")
         
-        # Render 환경에서 권한 확인
-        if os.environ.get('RENDER'):
+        # 데이터베이스 파일이 이미 존재하면 권한 확인
+        if os.path.exists(DATABASE):
             try:
-                # 데이터베이스 디렉토리 확인
-                db_dir = os.path.dirname(DATABASE)
-                if not os.path.exists(db_dir):
-                    print(f"데이터베이스 디렉토리 생성: {db_dir}")
-                    os.makedirs(db_dir, exist_ok=True)
-                    # 권한 설정
-                    os.chmod(db_dir, 0o777)
-                
-                # 데이터베이스 파일이 이미 존재하면 권한 확인
-                if os.path.exists(DATABASE):
-                    try:
-                        os.chmod(DATABASE, 0o666)
-                        print(f"데이터베이스 파일 권한 설정: {DATABASE}")
-                    except Exception as e:
-                        print(f"데이터베이스 파일 권한 설정 실패: {str(e)}")
+                os.chmod(DATABASE, 0o666)
+                print(f"데이터베이스 파일 권한 설정: {DATABASE}")
             except Exception as e:
-                print(f"Render 환경 디렉토리 확인 실패: {str(e)}")
+                print(f"데이터베이스 파일 권한 설정 실패: {str(e)}")
         
         # 실제 저장 시도
         try:
