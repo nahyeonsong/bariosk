@@ -61,7 +61,7 @@ function getApiBaseUrl() {
 
     // 로컬 개발 환경
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-        return "http://localhost:7210"; // 로컬 서버 사용
+        return "http://localhost:6190"; // 로컬 서버 사용
     }
 
     // 기타 모든 도메인 - Render 서버를 기본값으로 사용
@@ -157,10 +157,10 @@ async function apiRequest(endpoint, options = {}) {
     };
 
     try {
-        const baseUrl = getApiBaseUrl();
+        const API_BASE_URL = getApiBaseUrl();
         const timestamp = Date.now();
         const device = isMobileDevice() ? 'mobile' : 'pc';
-        const url = `${baseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}t=${timestamp}&device=${device}`;
+        const url = `${API_BASE_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}t=${timestamp}&device=${device}`;
         
         console.log('API 요청 URL:', url);
         console.log('API 요청 옵션:', finalOptions);
@@ -981,7 +981,7 @@ function renderCategoryList(categories) {
 
                 try {
                     const response = await apiRequest(
-                        `${API_BASE_URL}/api/categories/${encodeURIComponent(
+                        `api/categories/${encodeURIComponent(
                             category
                         )}`,
                         {
@@ -1038,7 +1038,7 @@ function renderCategoryList(categories) {
             if (confirm(`정말로 "${category}" 카테고리를 삭제하시겠습니까?`)) {
                 try {
                     await apiRequest(
-                        `${API_BASE_URL}/api/categories/${encodeURIComponent(
+                        `/api/categories/${encodeURIComponent(
                             category
                         )}`,
                         {
@@ -1141,7 +1141,7 @@ async function loadMenuData() {
 async function refreshMenuData() {
     const startTime = performance.now();
     try {
-        const url = `${API_BASE_URL}/api/menu?t=${Date.now()}`;
+        const url = `/api/menu?t=${Date.now()}`;
         console.log(`API URL에서 최신 메뉴 데이터 로드 시도: ${url}`);
 
         const response = await apiRequest(url);
@@ -2259,7 +2259,7 @@ async function saveCategoryOrderToServer(categories) {
     }
 
     try {
-        const apiEndpoint = `$'/api/categories/order`;
+        const apiEndpoint = `/api/categories/order`;
         const requestData = { categories: categories };
 
         console.log(`API 엔드포인트: ${apiEndpoint}`);

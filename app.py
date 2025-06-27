@@ -22,10 +22,10 @@ CORS(app,
     resources={
         r"/*": {
             "origins": [
-                "http://localhost:7210",
-                "http://127.0.0.1:7210",
-                "https://localhost:7210",
-                "https://127.0.0.1:7210",
+                "http://localhost:6190",
+                "http://127.0.0.1:6190",
+                "https://localhost:6190",
+                "https://127.0.0.1:6190",
                 "https://bariosk.onrender.com",
                 "https://www.bariosk.com",
                 "http://bariosk.onrender.com",
@@ -68,10 +68,10 @@ CORS(app,
 # 허용된 출처 목록 업데이트
 ALLOWED_ORIGINS = [
     # 일반적인 개발 포트
-    "http://localhost:7210",    # Flask 기본 포트
-    "http://127.0.0.1:7210",
-    "https://localhost:7210",
-    "https://127.0.0.1:7210",
+    "http://localhost:6190",    # Flask 기본 포트
+    "http://127.0.0.1:6190",
+    "https://localhost:6190",
+    "https://127.0.0.1:6190",
     "https://bariosk.onrender.com",
     "https://www.bariosk.com",
     "http://bariosk.onrender.com",
@@ -662,7 +662,7 @@ if __name__ == '__main__':
         
         
         # 서버 실행
-        port = int(os.environ.get('PORT', 7210))  # 기본 포트를 7210으로 변경
+        port = int(os.environ.get('PORT', 6190))  # 기본 포트를 6190으로 변경
         print(f"=== 서버 시작: 포트 {port} ===")
         
         # 캐시 관련 설정
