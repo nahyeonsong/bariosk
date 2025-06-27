@@ -198,7 +198,7 @@ def save_image(file):
         
     except Exception as e:
         print(f"이미지 저장 실패: {str(e)}")
-        return "logo.png"
+        return "static/images/logo.png"
 
 @app.route('/')
 def index():
@@ -286,7 +286,7 @@ def add_menu():
         'id': new_id,
         'name': data['name'],
         'price': data['price'],
-        'image': data.get('image', 'logo.png'),
+        'image': data.get('image', 'static/images/logo.png'),
         'temperature': data.get('temperature', ''),
         'order_index': len(menu_data[category])
     }
@@ -358,7 +358,7 @@ def create_default_image(filename, text=""):
         
     except Exception as e:
         print(f"이미지 저장 실패: {str(e)}")
-        return "logo.png"
+        return "static/images/logo.png"
 
 @app.route('/api/images/<filename>', methods=['GET', 'OPTIONS'])
 def serve_image(filename):
@@ -557,7 +557,7 @@ def update_menu_order():
                                 'id': item_id,
                                 'name': item['name'],
                                 'price': item['price'],
-                                'image': item.get('image', 'logo.png'),
+                                'image': item.get('image', 'static/images/logo.png'),
                                 'temperature': item.get('temperature', ''),
                                 'order_index': index
                             }

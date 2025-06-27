@@ -39,7 +39,7 @@
             "id": 8,
             "name": "돌체라떼",
             "price": "3000",
-            "image": "logo.png",
+            "image": "static/images/logo.png",
             "temperature": "I"
         }
     ],

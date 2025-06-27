@@ -1696,10 +1696,10 @@ function createMenuItem(item) {
         : "";
 
     menuItem.innerHTML = `
-        <img src="${API_BASE_URL}/api/images/${item.image || "logo.png"}" 
+        <img src="${API_BASE_URL}/api/images/${item.image || "static/images/logo.png"}" 
              alt="${item.name}" 
              class="menu-image" 
-             onerror="this.onerror=null; this.src='${API_BASE_URL}/api/images/logo.png';" />
+             onerror="this.onerror=null; this.src='${API_BASE_URL}/api/images/static/images/logo.png';" />
         <div class="menu-info">
             <h3>${item.name}</h3>
             <p class="price">${item.price.toLocaleString()}원</p>
