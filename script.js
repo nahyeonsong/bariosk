@@ -61,8 +61,7 @@ function getApiBaseUrl() {
 
     // 로컬 개발 환경
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-        // return "http://localhost:3000"; // 로컬 서버 사용 (기존 코드)
-        return RENDER_SERVER_URL; // 로컬 환경에서도 Render 서버 사용
+        return "http://localhost:5000"; // 로컬 서버 사용
     }
 
     // 기타 모든 도메인 - Render 서버를 기본값으로 사용
@@ -130,95 +129,59 @@ function loadCategoryOrderFromLocalStorage() {
     }
 }
 
-// API 요청 함수 (타임아웃 처리 및 재시도 로직 추가)
-async function apiRequest(url, options = {}, retries = 2) {
-    const startTime = performance.now();
+// API 요청 함수
+async function apiRequest(endpoint, options = {}) {
+    const defaultOptions = {
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        },
+        mode: 'cors'
+    };
 
-    // 오프라인 모드 확인
-    if (!navigator.onLine || API_BASE_URL === "offline") {
-        console.warn("오프라인 모드: 로컬 스토리지에서 데이터 로드 시도");
-        showOfflineNotification();
-        throw new Error("오프라인 모드");
-    }
+    // 기존 헤더와 새 헤더 병합
+    const mergedHeaders = {
+        ...defaultOptions.headers,
+        ...(options.headers || {})
+    };
+
+    // 최종 옵션 설정
+    const finalOptions = {
+        ...defaultOptions,
+        ...options,
+        headers: mergedHeaders
+    };
 
     try {
-        // AbortController를 사용하여 타임아웃 설정 (30초)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+        const baseUrl = getApiBaseUrl();
+        const timestamp = Date.now();
+        const device = isMobileDevice() ? 'mobile' : 'pc';
+        const url = `${baseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}t=${timestamp}&device=${device}`;
+        
+        console.log('API 요청 URL:', url);
+        console.log('API 요청 옵션:', finalOptions);
 
-        console.log(
-            `API 요청: ${url} (남은 재시도: ${retries}, 타임아웃: ${REQUEST_TIMEOUT}ms)`
-        );
-
-        const response = await fetch(url, {
-            ...options,
-            signal: controller.signal,
-            headers: {
-                "Content-Type": "application/json",
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                Pragma: "no-cache",
-                ...options.headers,
-            },
-        });
-
-        clearTimeout(timeoutId);
-
-        const elapsed = performance.now() - startTime;
-        console.log(`API 응답: ${url} (${elapsed.toFixed(0)}ms)`);
-
+        const response = await fetch(url, finalOptions);
+        
         if (!response.ok) {
-            let errorMessage;
-            try {
-                const errorData = await response.json();
-                errorMessage =
-                    errorData.error || `서버 오류: ${response.status}`;
-            } catch (e) {
-                errorMessage = `서버 오류: ${response.status}`;
-            }
-            throw new Error(errorMessage);
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-
-        return response;
+        
+        // 응답 헤더 확인
+        console.log('응답 헤더:', Object.fromEntries(response.headers.entries()));
+        
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return await response.json();
+        } else {
+            return response;
+        }
     } catch (error) {
-        const elapsed = performance.now() - startTime;
-
-        // 네트워크 연결 확인
-        if (!navigator.onLine) {
-            console.error(
-                "네트워크 연결이 없습니다. 로컬 데이터를 사용합니다."
-            );
-            showOfflineNotification();
-            throw new Error("네트워크 연결 없음");
-        }
-
-        if (error.name === "AbortError") {
-            console.error(`요청 시간 초과: ${url} (${elapsed.toFixed(0)}ms)`);
-            if (retries > 0) {
-                console.log(
-                    `${url} 재시도 중... (남은 재시도: ${retries - 1})`
-                );
-                return apiRequest(url, options, retries - 1);
-            }
-            throw new Error(
-                "요청 시간이 초과되었습니다. 서버 응답이 지연되고 있습니다."
-            );
-        }
-
-        if (
-            retries > 0 &&
-            (error.message.includes("Failed to fetch") ||
-                error.message.includes("NetworkError"))
-        ) {
-            console.log(
-                `네트워크 오류로 ${url} 재시도 중... (남은 재시도: ${
-                    retries - 1
-                })`
-            );
-            // 지수 백오프: 재시도 전 약간의 지연 추가
-            await new Promise((r) => setTimeout(r, 1000 * (3 - retries)));
-            return apiRequest(url, options, retries - 1);
-        }
-
+        console.error('서버 요청 중 오류:', error);
         throw error;
     }
 }

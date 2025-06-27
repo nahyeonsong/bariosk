@@ -20,39 +20,119 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS(app, 
     resources={
         r"/*": {
-            "origins": ["http://localhost:5173", "http://localhost:3000", "https://bariosk.onrender.com", "https://www.bariosk.com"],
+            "origins": [
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://localhost:8080",
+                "http://localhost:5000",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:8080",
+                "http://127.0.0.1:5000",
+                "https://localhost:3000",
+                "https://localhost:5173",
+                "https://localhost:8080",
+                "https://localhost:5000",
+                "https://127.0.0.1:3000",
+                "https://127.0.0.1:5173",
+                "https://127.0.0.1:8080",
+                "https://127.0.0.1:5000",
+                "https://bariosk.onrender.com",
+                "https://www.bariosk.com",
+                "http://bariosk.onrender.com",
+                "http://www.bariosk.com"
+            ],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
-            "expose_headers": ["Content-Type", "X-CSRFToken"],
+            "allow_headers": [
+                "Content-Type",
+                "Authorization",
+                "X-Requested-With",
+                "Accept",
+                "Origin",
+                "Access-Control-Request-Method",
+                "Access-Control-Request-Headers",
+                "Cache-Control",
+                "cache-control",
+                "Pragma",
+                "If-Modified-Since",
+                "If-None-Match",
+                "Referer",
+                "Sec-Fetch-Dest",
+                "Sec-Fetch-Mode",
+                "Sec-Fetch-Site"
+            ],
+            "expose_headers": [
+                "Content-Type",
+                "X-CSRFToken",
+                "Cache-Control",
+                "cache-control",
+                "Expires",
+                "Last-Modified",
+                "ETag"
+            ],
+            "supports_credentials": True,
             "max_age": 3600
         }
     }
 )
 
+# 허용된 출처 목록 업데이트
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",    # React 기본 개발 서버
+    "http://localhost:5173",    # Vite 기본 개발 서버
+    "http://localhost:8080",    # 일반적인 개발 포트
+    "http://localhost:5000",    # Flask 기본 포트
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:5000",
+    "https://localhost:3000",
+    "https://localhost:5173",
+    "https://localhost:8080",
+    "https://localhost:5000",
+    "https://127.0.0.1:3000",
+    "https://127.0.0.1:5173",
+    "https://127.0.0.1:8080",
+    "https://127.0.0.1:5000",
+    "https://bariosk.onrender.com",
+    "https://www.bariosk.com",
+    "http://bariosk.onrender.com",
+    "http://www.bariosk.com"
+]
+
 # 모든 응답에 CORS 헤더 추가
 @app.after_request
 def after_request(response):
     origin = request.headers.get('Origin')
-    if origin:
+    print(f"\n=== CORS 헤더 처리 시작 ===")
+    print(f"요청 URL: {request.url}")
+    print(f"요청 메서드: {request.method}")
+    print(f"요청 Origin: {origin}")
+    print(f"요청 헤더: {dict(request.headers)}")
+    
+    if origin in ALLOWED_ORIGINS:
         response.headers['Access-Control-Allow-Origin'] = origin
     else:
-        response.headers['Access-Control-Allow-Origin'] = '*'
+        # 개발 환경에서는 모든 로컬호스트 요청 허용
+        if origin and ('localhost' in origin or '127.0.0.1' in origin):
+            response.headers['Access-Control-Allow-Origin'] = origin
+        else:
+            response.headers['Access-Control-Allow-Origin'] = ALLOWED_ORIGINS[0]
     
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept, Origin'
-    response.headers['Access-Control-Expose-Headers'] = 'Content-Type, X-CSRFToken'
-    response.headers['Access-Control-Max-Age'] = '3600'
+    response.headers.update({
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': '*',  # 모든 헤더 허용
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Max-Age': '3600',
+        'Access-Control-Expose-Headers': '*',  # 모든 헤더 노출
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Vary': 'Origin'  # 캐시 키에 Origin 포함
+    })
     
-    # 캐시 방지 헤더 추가
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    
-    # 보안 헤더 추가
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Referrer-Policy'] = 'no-referrer'
+    print(f"응답 헤더: {dict(response.headers)}")
+    print("=== CORS 헤더 처리 완료 ===\n")
     
     return response
 
@@ -148,6 +228,7 @@ def get_db():
 
 def init_db():
     try:
+        print("=== 데이터베이스 초기화 시작 ===")
         # 데이터베이스 파일이 있는지 확인
         db_exists = os.path.exists(DATABASE)
         print(f"데이터베이스 파일 존재 여부: {db_exists}")
@@ -155,40 +236,43 @@ def init_db():
         # 데이터베이스 연결
         conn = get_db()
         
-        # 메뉴 테이블 생성 (order_index 필드 추가)
-        conn.execute('''
-                CREATE TABLE IF NOT EXISTS menu (
-                    id INTEGER PRIMARY KEY,
-                    category TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    price TEXT NOT NULL,
-                    image TEXT NOT NULL,
-                    temperature TEXT,
-                    order_index INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
         # 이미지 테이블 생성
         conn.execute('''
-                CREATE TABLE IF NOT EXISTS images (
-                    filename TEXT PRIMARY KEY,
-                    data BLOB NOT NULL,
-                    content_type TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-        # 카테고리 순서 전용 테이블 생성
+            CREATE TABLE IF NOT EXISTS images (
+                filename TEXT PRIMARY KEY,
+                data BLOB NOT NULL,
+                content_type TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("이미지 테이블 생성 완료")
+        
+        # 메뉴 테이블 생성
         conn.execute('''
-                CREATE TABLE IF NOT EXISTS category_order (
-                    id INTEGER PRIMARY KEY,
-                    category TEXT NOT NULL,
-                    order_index INTEGER NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(category)
-                )
-            ''')
+            CREATE TABLE IF NOT EXISTS menu (
+                id INTEGER PRIMARY KEY,
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                price TEXT NOT NULL,
+                image TEXT NOT NULL,
+                temperature TEXT,
+                order_index INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("메뉴 테이블 생성 완료")
+            
+        # 카테고리 순서 테이블 생성
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS category_order (
+                id INTEGER PRIMARY KEY,
+                category TEXT NOT NULL,
+                order_index INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(category)
+            )
+        ''')
+        print("카테고리 순서 테이블 생성 완료")
             
         conn.commit()
         print("테이블 생성 성공")
@@ -253,8 +337,21 @@ def init_db():
         else:
             print("기존 데이터가 있어 초기화를 건너뜁니다.")
             
+        # 기본 로고 이미지 생성
+        try:
+            cursor = conn.execute('SELECT COUNT(*) FROM images WHERE filename = ?', ('logo.png',))
+            if cursor.fetchone()[0] == 0:
+                print("기본 로고 이미지 생성 시작")
+                create_default_logo()
+                print("기본 로고 이미지 생성 완료")
+            else:
+                print("기본 로고 이미지가 이미 존재합니다.")
+        except Exception as e:
+            print(f"로고 이미지 확인 중 오류: {str(e)}")
+            create_default_logo()
+            
         conn.close()
-        print("데이터베이스 초기화 성공")
+        print("=== 데이터베이스 초기화 완료 ===")
     except Exception as e:
         print(f"데이터베이스 초기화 실패: {str(e)}")
         import traceback
@@ -993,11 +1090,41 @@ def serve_image(filename):
     print(f"\n=== 이미지 요청 시작: {filename} ===")
     print(f"요청 메서드: {request.method}")
     print(f"요청 URL: {request.url}")
+    print(f"요청 Origin: {request.headers.get('Origin')}")
     print(f"요청 헤더: {dict(request.headers)}")
     
+    # OPTIONS 요청 처리
     if request.method == 'OPTIONS':
         print("OPTIONS 요청 처리")
         response = app.make_default_options_response()
+        
+        # CORS 헤더 추가
+        origin = request.headers.get('Origin')
+        print(f"OPTIONS 요청의 Origin: {origin}")
+        
+        # 허용된 출처인지 확인
+        if origin in ALLOWED_ORIGINS:
+            print(f"허용된 Origin: {origin}")
+            response.headers['Access-Control-Allow-Origin'] = origin
+        else:
+            print(f"허용되지 않은 Origin: {origin}")
+            print(f"허용된 Origin 목록: {ALLOWED_ORIGINS}")
+            response.headers['Access-Control-Allow-Origin'] = ALLOWED_ORIGINS[0]
+            
+        response.headers.update({
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Max-Age': '3600',
+            'Access-Control-Expose-Headers': 'Content-Type, X-CSRFToken',
+            'Cross-Origin-Resource-Policy': 'cross-origin',
+            'Cross-Origin-Embedder-Policy': 'require-corp',
+            'Cross-Origin-Opener-Policy': 'same-origin',
+            'Timing-Allow-Origin': '*'
+        })
+        
+        print(f"OPTIONS 응답 헤더: {dict(response.headers)}")
+        print("=== OPTIONS 요청 처리 완료 ===\n")
         return response
 
     try:
@@ -1041,20 +1168,28 @@ def serve_image(filename):
                     
                     # CORS 및 보안 헤더 설정
                     origin = request.headers.get('Origin')
-                    if origin:
+                    allowed_origins = ["http://localhost:5173", "http://localhost:5000", "https://bariosk.onrender.com", "https://www.bariosk.com"]
+                    
+                    if origin in allowed_origins:
                         response.headers['Access-Control-Allow-Origin'] = origin
                     else:
-                        response.headers['Access-Control-Allow-Origin'] = '*'
+                        response.headers['Access-Control-Allow-Origin'] = allowed_origins[0]
                     
                     response.headers.update({
                         'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin',
+                        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
+                        'Access-Control-Allow-Credentials': 'true',
                         'Access-Control-Max-Age': '3600',
+                        'Access-Control-Expose-Headers': 'Content-Type, X-CSRFToken',
                         'X-Content-Type-Options': 'nosniff',
                         'Cache-Control': 'public, max-age=31536000',
                         'Pragma': 'cache',
                         'Expires': 'Thu, 31 Dec 2037 23:55:55 GMT',
-                        'Referrer-Policy': 'no-referrer'
+                        'Referrer-Policy': 'no-referrer',
+                        'Cross-Origin-Resource-Policy': 'cross-origin',
+                        'Cross-Origin-Embedder-Policy': 'require-corp',
+                        'Cross-Origin-Opener-Policy': 'same-origin',
+                        'Timing-Allow-Origin': '*'
                     })
                     
                     print(f"이미지 전송 완료: {filename}")
@@ -1163,7 +1298,11 @@ def create_and_serve_default_image(filename):
                 'Cache-Control': 'public, max-age=31536000',
                 'Pragma': 'cache',
                 'Expires': 'Thu, 31 Dec 2037 23:55:55 GMT',
-                'Referrer-Policy': 'no-referrer'
+                'Referrer-Policy': 'no-referrer',
+                'Cross-Origin-Resource-Policy': 'cross-origin',
+                'Cross-Origin-Embedder-Policy': 'require-corp',
+                'Cross-Origin-Opener-Policy': 'same-origin',
+                'Timing-Allow-Origin': '*'
             })
             
             print(f"기본 이미지 전송 준비 완료: {filename}")
@@ -1824,12 +1963,36 @@ def upload_image():
         print(f"이미지 업로드 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/categories/order', methods=['GET', 'PUT'])
+@app.route('/api/categories/order', methods=['GET', 'PUT', 'OPTIONS'])
 def update_category_order():
     try:
         print("=== 카테고리 순서 처리 시작 ===")
+        print(f"요청 메서드: {request.method}")
+        print(f"요청 헤더: {dict(request.headers)}")
         
-        # GET 요청 처리 - 현재 카테고리 순서 반환
+        # OPTIONS 요청 처리
+        if request.method == 'OPTIONS':
+            response = app.make_default_options_response()
+            
+            # CORS 헤더 설정
+            origin = request.headers.get('Origin')
+            if origin in ALLOWED_ORIGINS:
+                response.headers['Access-Control-Allow-Origin'] = origin
+            else:
+                response.headers['Access-Control-Allow-Origin'] = ALLOWED_ORIGINS[0]
+                
+            response.headers.update({
+                'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Cache-Control, cache-control, Pragma',
+                'Access-Control-Allow-Credentials': 'true',
+                'Access-Control-Max-Age': '3600',
+                'Access-Control-Expose-Headers': 'Content-Type, X-CSRFToken, Cache-Control, cache-control, Expires, Last-Modified, ETag'
+            })
+            
+            print(f"OPTIONS 응답 헤더: {dict(response.headers)}")
+            return response
+            
+        # GET 요청 처리
         if request.method == 'GET':
             print("카테고리 순서 조회 요청")
             conn = get_db()
@@ -1855,12 +2018,13 @@ def update_category_order():
                 'timestamp': int(time.time())
             }), 200
         
-        # PUT 요청 처리 - 카테고리 순서 업데이트
+        # PUT 요청 처리
         data = request.get_json()
+        print(f"받은 데이터: {data}")
         
         if not data or 'categories' not in data:
             return jsonify({'error': '카테고리 목록이 필요합니다.'}), 400
-        
+            
         categories = data['categories']
         print(f"받은 카테고리 순서: {categories}")
         
@@ -1917,7 +2081,7 @@ def update_category_order():
             if not is_sync_request:
                 try:
                     # 모든 환경에서 명시적으로 동기화 서버 URL 지정
-                    sync_servers = ["https://bariosk.onrender.com", "http://localhost:3000", "https://www.bariosk.com"]
+                    sync_servers = ["https://bariosk.onrender.com", "http://localhost:5000", "https://www.bariosk.com"]
                     current_host = request.host_url.rstrip('/')
                     
                     print(f"현재 호스트: {current_host}")
@@ -2164,10 +2328,13 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"메뉴 이미지 확인 실패: {str(e)}")
             raise
-
+        
         # 서버 실행
-        port = int(os.environ.get('PORT', 3000))
+        port = int(os.environ.get('PORT', 5000))  # 기본 포트를 5000으로 변경
         print(f"=== 서버 시작: 포트 {port} ===")
+        
+        # 캐시 관련 설정
+        app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # 정적 파일의 캐시 비활성화
         
         # 디버그 모드로 실행
         app.run(debug=True, host='0.0.0.0', port=port)
@@ -2177,5 +2344,5 @@ if __name__ == '__main__':
         import traceback
         print("상세 오류:")
         print(traceback.format_exc())
-        raise 
+        raise
 
