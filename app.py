@@ -224,19 +224,6 @@ def get_menu_from_render():
         print(f"Render 서버 연결 실패: {str(e)}")
         return {}
     
-@app.route('/api/images-list')
-def images_list():
-    try:
-        print("이미지 목록 조회 시작")
-        cursor = conn.cursor()
-        cursor.execute('SELECT filename FROM images')
-        files = [row[0] for row in cursor.fetchall()]
-        print(f"조회된 이미지 목록: {files}")
-        conn.close()
-        return jsonify(files)
-    except Exception as e:
-        print(f"이미지 목록 조회 실패: {str(e)}")
-        return jsonify({"error": str(e)}), 500
     
 def save_menu_to_render(data):
     try:
@@ -428,88 +415,8 @@ def serve_image(filename):
         print(f"OPTIONS 응답 헤더: {dict(response.headers)}")
         print("=== OPTIONS 요청 처리 완료 ===\n")
         return response
-
-    try:
-        print(f"이미지 파일 요청: {filename}")
         
-        try:
-            # 이미지 조회
-            cursor.execute('SELECT data, content_type FROM images WHERE filename = ?', (filename,))
-            result = cursor.fetchone()
-            
-            if result and result['data']:
-                print(f"이미지 찾음: {filename}, 데이터 크기: {len(result['data'])} bytes")
-                
-                # 이미지 데이터 검증
-                try:
-                    img = Image.open(io.BytesIO(result['data']))
-                    print(f"이미지 포맷: {img.format}, 크기: {img.size}")
-                    
-                    # 이미지 데이터를 다시 바이트로 변환
-                    img_byte_arr = io.BytesIO()
-                    img.save(img_byte_arr, format=img.format if img.format else 'JPEG', quality=85, optimize=True)
-                    img_byte_arr.seek(0)
-                    
-                    response = send_file(
-                        img_byte_arr,
-                        mimetype=result['content_type'],
-                        as_attachment=False,
-                        download_name=filename,
-                        conditional=True
-                    )
-                    
-                    # CORS 및 보안 헤더 설정
-                    origin = request.headers.get('Origin')
-                    allowed_origins = ["http://localhost:5173", "http://localhost:5000", "https://bariosk.onrender.com", "https://www.bariosk.com"]
-                    
-                    if origin in allowed_origins:
-                        response.headers['Access-Control-Allow-Origin'] = origin
-                    else:
-                        response.headers['Access-Control-Allow-Origin'] = allowed_origins[0]
-                    
-                    response.headers.update({
-                        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
-                        'Access-Control-Allow-Credentials': 'true',
-                        'Access-Control-Max-Age': '3600',
-                        'Access-Control-Expose-Headers': 'Content-Type, X-CSRFToken',
-                        'X-Content-Type-Options': 'nosniff',
-                        'Cache-Control': 'public, max-age=31536000',
-                        'Pragma': 'cache',
-                        'Expires': 'Thu, 31 Dec 2037 23:55:55 GMT',
-                        'Referrer-Policy': 'no-referrer',
-                        'Cross-Origin-Resource-Policy': 'cross-origin',
-                        'Cross-Origin-Embedder-Policy': 'require-corp',
-                        'Cross-Origin-Opener-Policy': 'same-origin',
-                        'Timing-Allow-Origin': '*'
-                    })
-                    
-                    print(f"이미지 전송 완료: {filename}")
-                    return response
-                    
-                except Exception as img_error:
-                    print(f"이미지 처리 중 오류: {str(img_error)}")
-                    print("기본 이미지 생성 시도")
-                    return create_and_serve_default_image(filename)
-            else:
-                print(f"이미지를 찾을 수 없음: {filename}, 기본 이미지 생성")
-                return create_and_serve_default_image(filename)
-                
-        except Exception as e:
-            print(f"데이터베이스 쿼리 실패: {str(e)}")
-            return jsonify({'error': str(e)}), 500
-        finally:
-            conn.close()
-            print("데이터베이스 연결 종료")
-            
-    except Exception as e:
-        print(f"이미지 처리 중 오류 발생: {str(e)}")
-        import traceback
-        print("상세 오류:")
-        print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
-    finally:
-        print(f"=== 이미지 요청 종료: {filename} ===\n")
+
 
 def create_and_serve_default_image(filename):
     """기본 이미지를 생성하고 서빙하는 함수"""
@@ -552,31 +459,6 @@ def create_and_serve_default_image(filename):
         image_data = output.getvalue()
         print(f"이미지 변환 완료: {len(image_data)} bytes")
         
-            
-        # CORS 및 보안 헤더 설정
-        origin = request.headers.get('Origin')
-        if origin:
-            response.headers['Access-Control-Allow-Origin'] = origin
-        else:
-            response.headers['Access-Control-Allow-Origin'] = '*'
-            
-            response.headers.update({
-                'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin',
-                'Access-Control-Max-Age': '3600',
-                'X-Content-Type-Options': 'nosniff',
-                'Cache-Control': 'public, max-age=31536000',
-                'Pragma': 'cache',
-                'Expires': 'Thu, 31 Dec 2037 23:55:55 GMT',
-                'Referrer-Policy': 'no-referrer',
-                'Cross-Origin-Resource-Policy': 'cross-origin',
-                'Cross-Origin-Embedder-Policy': 'require-corp',
-                'Cross-Origin-Opener-Policy': 'same-origin',
-                'Timing-Allow-Origin': '*'
-            })
-            
-            print(f"기본 이미지 전송 준비 완료: {filename}")
-            return response
             
     except Exception as e:
         print(f"기본 이미지 생성 실패: {str(e)}")
@@ -839,95 +721,17 @@ def update_category_order():
         sync_source = data.get('sync_source', None)
         is_sync_request = sync_source is not None
         
-        if is_sync_request:
-            print(f"동기화 요청 (출처: {sync_source})")
         
             
-            # 기존 카테고리 정보 조회
-            cursor.execute("SELECT category FROM category_order ORDER BY order_index")
-            existing_categories = [row['category'] for row in cursor.fetchall()]
-            print(f"기존 카테고리 순서: {existing_categories}")
+        # CORS 헤더 추가
+        response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': categories})
             
-            # 모든 카테고리 순서 초기화
-            cursor.execute("DELETE FROM category_order")
-            print("기존 카테고리 순서 초기화")
+        # 캐시 관련 헤더만 추가
+        response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
+        response.headers.add('Pragma', 'no-cache')
+        response.headers.add('Expires', '0')
             
-            # 새 순서 저장
-            for index, category in enumerate(categories):
-                cursor.execute("""
-                    INSERT INTO category_order (category, order_index)
-                    VALUES (?, ?)
-                """, (category, index))
-                print(f"카테고리 '{category}' 순서 {index}로 저장")
-            
-            # 없는 카테고리가 있는지 확인하고 필요하면 메뉴 항목 추가
-            cursor.execute("SELECT DISTINCT category FROM menu")
-            menu_categories = [row['category'] for row in cursor.fetchall()]
-            
-            for category in categories:
-                if category not in menu_categories:
-                    print(f"새 카테고리 '{category}' 발견, 메뉴 항목 추가")
-                    cursor.execute("""
-                        INSERT INTO menu (category, name, price, image, temperature, order_index)
-                        VALUES (?, '대표메뉴', '0', 'logo.png', '', ?)
-                    """, (category, -999))
-            
-            # 변경사항 커밋
-            cursor.execute("COMMIT")
-            conn.close()
-            
-            print("카테고리 순서 업데이트 완료")
-            
-            # 다른 서버로 동기화 (동기화 요청이 아닌 경우에만)
-            if not is_sync_request:
-                try:
-                    # 모든 환경에서 명시적으로 동기화 서버 URL 지정
-                    sync_servers = ["https://bariosk.onrender.com", "http://localhost:5000", "https://www.bariosk.com"]
-                    current_host = request.host_url.rstrip('/')
-                    
-                    print(f"현재 호스트: {current_host}")
-                    print(f"동기화할 서버 목록: {sync_servers}")
-                    
-                    # 현재 호스트가 아닌 다른 모든 서버로 동기화 요청 보내기
-                    for server_url in sync_servers:
-                        if server_url != current_host:
-                            print(f"{server_url}에 카테고리 순서 동기화 요청 보내기")
-                            try:
-                                response = requests.put(
-                                    f"{server_url}/api/categories/order",
-                                    json={'categories': categories, 'sync_source': current_host},
-                                    headers={
-                                        'Content-Type': 'application/json',
-                                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                                        'Pragma': 'no-cache',
-                                        'Expires': '0'
-                                    },
-                                    timeout=8  # 타임아웃 줄임
-                                )
-                                
-                                print(f"{server_url} 응답 상태 코드: {response.status_code}")
-                                if response.status_code == 200:
-                                    print(f"{server_url}에 카테고리 순서 동기화 성공")
-                                else:
-                                    print(f"{server_url}에 카테고리 순서 동기화 실패: {response.text}")
-                            except Exception as server_error:
-                                print(f"{server_url} 동기화 중 오류: {str(server_error)}")
-                                # 개별 서버 동기화 실패는 무시하고 계속 진행
-                except Exception as e:
-                    print(f"서버 동기화 중 일반 오류: {str(e)}")
-                    # 동기화 실패는 무시하고 계속 진행
-            else:
-                print(f"동기화 요청으로 추가 동기화는 수행하지 않음")
-            
-            # CORS 헤더 추가
-            response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': categories})
-            
-            # 캐시 관련 헤더만 추가
-            response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
-            response.headers.add('Pragma', 'no-cache')
-            response.headers.add('Expires', '0')
-            
-            return response, 200
+        return response, 200
             
     except Exception as e:
         print(f"카테고리 순서 처리 중 오류 발생: {str(e)}")
@@ -957,35 +761,6 @@ def add_logo():
 @app.route('/upload.html')
 def serve_upload_page():
     return send_from_directory('.', 'upload.html')
-
-@app.route('/favicon.ico')
-def favicon():
-    try:
-       
-        
-        if result and result['data']:
-            # 로고 이미지를 PIL Image로 변환
-            img = Image.open(io.BytesIO(result['data']))
-            # 32x32 크기로 리사이즈
-            img = img.resize((32, 32), Image.LANCZOS)
-            # ICO 형식으로 변환
-            ico_output = io.BytesIO()
-            img.save(ico_output, format='ICO', sizes=[(32, 32)])
-            ico_output.seek(0)
-            
-            return send_file(
-                ico_output,
-                mimetype='image/x-icon'
-            )
-    except Exception as e:
-        print(f"Favicon 생성 실패: {str(e)}")
-    
-    # 오류 발생 시 빈 favicon 반환
-    img = Image.new('RGB', (32, 32), color='#CCCCCC')
-    output = io.BytesIO()
-    img.save(output, format='ICO', sizes=[(32, 32)])
-    output.seek(0)
-    return send_file(output, mimetype='image/x-icon')
 
 # 서버 실행
 if __name__ == '__main__':
