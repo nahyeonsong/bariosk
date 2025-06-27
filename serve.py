@@ -3,7 +3,7 @@ import socketserver
 from flask import send_file, abort
 from io import BytesIO
 
-PORT = 5000
+PORT = 7210
 DIRECTORY = "."
 
 class Handler(http.server.SimpleHTTPRequestHandler):

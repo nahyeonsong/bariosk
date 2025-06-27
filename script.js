@@ -61,7 +61,7 @@ function getApiBaseUrl() {
 
     // 로컬 개발 환경
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-        return "http://localhost:5000"; // 로컬 서버 사용
+        return "http://localhost:7210"; // 로컬 서버 사용
     }
 
     // 기타 모든 도메인 - Render 서버를 기본값으로 사용

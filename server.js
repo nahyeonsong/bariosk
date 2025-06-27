@@ -10,7 +10,7 @@ app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// 5000 포트에서 서버 실행
-app.listen(5000, () => {
-    console.log("Frontend server is running on http://localhost:5000");
+// 7210 포트에서 서버 실행
+app.listen(7210, () => {
+    console.log("Frontend server is running on http://localhost:7210");
 });

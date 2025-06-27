@@ -16,5 +16,8 @@
     "bugs": {
         "url": "https://github.com/nahyeonsong/bariosk/issues"
     },
-    "homepage": "https://nahyeonsong.github.io/bariosk"
+    "homepage": "https://nahyeonsong.github.io/bariosk",
+    "dependencies": {
+        "cors": "^2.8.5"
+    }
 }

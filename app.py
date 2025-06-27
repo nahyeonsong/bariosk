@@ -22,22 +22,10 @@ CORS(app,
     resources={
         r"/*": {
             "origins": [
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://localhost:8080",
-                "http://localhost:5000",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:5173",
-                "http://127.0.0.1:8080",
-                "http://127.0.0.1:5000",
-                "https://localhost:3000",
-                "https://localhost:5173",
-                "https://localhost:8080",
-                "https://localhost:5000",
-                "https://127.0.0.1:3000",
-                "https://127.0.0.1:5173",
-                "https://127.0.0.1:8080",
-                "https://127.0.0.1:5000",
+                "http://localhost:7210",
+                "http://127.0.0.1:7210",
+                "https://localhost:7210",
+                "https://127.0.0.1:7210",
                 "https://bariosk.onrender.com",
                 "https://www.bariosk.com",
                 "http://bariosk.onrender.com",
@@ -79,22 +67,11 @@ CORS(app,
 
 # 허용된 출처 목록 업데이트
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",    # React 기본 개발 서버
-    "http://localhost:5173",    # Vite 기본 개발 서버
-    "http://localhost:8080",    # 일반적인 개발 포트
-    "http://localhost:5000",    # Flask 기본 포트
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8080",
-    "http://127.0.0.1:5000",
-    "https://localhost:3000",
-    "https://localhost:5173",
-    "https://localhost:8080",
-    "https://localhost:5000",
-    "https://127.0.0.1:3000",
-    "https://127.0.0.1:5173",
-    "https://127.0.0.1:8080",
-    "https://127.0.0.1:5000",
+    # 일반적인 개발 포트
+    "http://localhost:7210",    # Flask 기본 포트
+    "http://127.0.0.1:7210",
+    "https://localhost:7210",
+    "https://127.0.0.1:7210",
     "https://bariosk.onrender.com",
     "https://www.bariosk.com",
     "http://bariosk.onrender.com",
@@ -122,10 +99,8 @@ def after_request(response):
     
     response.headers.update({
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': '*',  # 모든 헤더 허용
         'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Max-Age': '3600',
-        'Access-Control-Expose-Headers': '*',  # 모든 헤더 노출
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
@@ -769,7 +744,7 @@ if __name__ == '__main__':
         
         
         # 서버 실행
-        port = int(os.environ.get('PORT', 5000))  # 기본 포트를 5000으로 변경
+        port = int(os.environ.get('PORT', 7210))  # 기본 포트를 7210으로 변경
         print(f"=== 서버 시작: 포트 {port} ===")
         
         # 캐시 관련 설정
