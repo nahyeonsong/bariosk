@@ -2259,7 +2259,7 @@ async function saveCategoryOrderToServer(categories) {
     }
 
     try {
-        const apiEndpoint = `${API_BASE_URL}/api/categories/order`;
+        const apiEndpoint = `$'/api/categories/order`;
         const requestData = { categories: categories };
 
         console.log(`API 엔드포인트: ${apiEndpoint}`);
