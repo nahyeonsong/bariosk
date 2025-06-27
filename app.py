@@ -261,7 +261,7 @@ def add_menu():
         'id': new_id,
         'name': data['name'],
         'price': data['price'],
-        'image': data.get('image', 'static/images/logo.png'),
+        'image': data.get('image', 'logo.png'),
         'temperature': data.get('temperature', ''),
         'order_index': len(menu_data[category])
     }
@@ -280,6 +280,8 @@ def update_menu(menu_id, category):
             for key in ['name', 'price', 'image', 'temperature']:
                 if key in data:
                     item[key] = data[key]
+            if 'image' not in data:
+                item['image'] = 'logo.png'
             save_menu_data(menu_data)
             return jsonify({'message': '메뉴가 수정되었습니다.', 'menu': item})
     return jsonify({'error': '메뉴를 찾을 수 없습니다.'}), 404
@@ -708,12 +710,16 @@ def add_logo():
         print("로고 이미지 추가 시작")
         if 'image' not in request.files:
             return jsonify({'error': '이미지 파일이 필요합니다.'}), 400
-            
+
         file = request.files['image']
         if file.filename == '':
             return jsonify({'error': '선택된 파일이 없습니다.'}), 400
-                
-               
+
+        if file and allowed_file(file.filename):
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], 'logo.png')
+            file.save(save_path)
+            return jsonify({'message': '로고가 성공적으로 추가되었습니다.'}), 200
+
         return jsonify({'error': '허용되지 않는 파일 형식입니다.'}), 400
     except Exception as e:
         print(f"로고 추가 중 오류 발생: {str(e)}")

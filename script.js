@@ -1696,7 +1696,7 @@ function createMenuItem(item) {
         : "";
 
     menuItem.innerHTML = `
-        <img src="${API_BASE_URL}/api/images/${item.image || "static/images/logo.png"}" 
+        <img src="${API_BASE_URL}/static/images/${item.image || "logo.png"}" 
              alt="${item.name}" 
              class="menu-image" 
              onerror="this.onerror=null; this.src='${API_BASE_URL}/api/images/static/images/logo.png';" />
