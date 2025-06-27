@@ -321,20 +321,6 @@ def delete_menu(menu_id, category):
     save_menu_data(menu_data)
     return jsonify({'message': '메뉴가 삭제되었습니다.'})
 
-@app.route('/api/upload-image', methods=['POST'])
-def upload_image():
-    if 'image' not in request.files:
-        return jsonify({'error': '이미지 파일이 필요합니다.'}), 400
-    file = request.files['image']
-    if file.filename == '':
-        return jsonify({'error': '선택된 파일이 없습니다.'}), 400
-    if file:
-        filename = secure_filename(file.filename)
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(save_path)
-        return jsonify({'message': '이미지 업로드 성공', 'filename': filename})
-    return jsonify({'error': '이미지 업로드 실패'}), 500
-
 def create_default_image(filename, text=""):
     try:
         print(f"기본 이미지 생성 시작: {filename}")
