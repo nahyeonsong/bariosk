@@ -1,5 +1,5 @@
-// API 기본 URL 설정
-const API_BASE_URL = getApiBaseUrl();
+// 만약 강제로 배포 서버를 사용하고 싶으면 아래 주석을 해제하세요.
+const API_BASE_URL = "https://bariosk.onrender.com";
 
 // 모바일 기기 확인 함수
 function isMobileDevice() {
@@ -1517,7 +1517,7 @@ async function cloneMenuItem(item, category) {
         if (item.image) {
             try {
                 const imageResponse = await fetch(
-                    `${API_BASE_URL}/api/images/${item.image}`
+                    `${API_BASE_URL}/static/images/${item.image}`
                 );
                 const imageBlob = await imageResponse.blob();
                 formData.append("image", imageBlob, "image.jpg");
@@ -1699,7 +1699,7 @@ function createMenuItem(item) {
         <img src="${API_BASE_URL}/static/images/${item.image || "logo.png"}" 
              alt="${item.name}" 
              class="menu-image" 
-             onerror="this.onerror=null; this.src='${API_BASE_URL}/api/images/static/images/logo.png';" />
+             onerror="this.onerror=null; this.src='${API_BASE_URL}/static/images/logo.png';" />
         <div class="menu-info">
             <h3>${item.name}</h3>
             <p class="price">${item.price.toLocaleString()}원</p>

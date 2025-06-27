@@ -179,68 +179,7 @@ def save_image(file):
 def index():
     return send_from_directory('.', 'index.html')
 
-def get_menu_from_render():
-    try:
-        response = requests.get(f"{RENDER_API_URL}/api/menu")
-        if response.status_code == 200:
-            menu_data = response.json()
-            print(f"Render 서버에서 메뉴 데이터 가져옴: {menu_data}")
-            
-            # 로컬 데이터베이스에 저장
-            if not os.environ.get('RENDER'):
-                save_menu_data(menu_data)
-                print("로컬 데이터베이스에 메뉴 데이터 저장 완료")
-            
-            return menu_data
-        else:
-            print(f"Render 서버에서 메뉴 데이터를 가져오는데 실패했습니다: {response.status_code}")
-            return {}
-    except Exception as e:
-        print(f"Render 서버 연결 실패: {str(e)}")
-        return {}
     
-    
-def save_menu_to_render(data):
-    try:
-        print(f"Render 서버에 저장할 데이터: {json.dumps(data, ensure_ascii=False)[:500]}...")
-        
-        # 요청 헤더 설정
-        headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-        
-        # 타임아웃 설정 (15초)
-        response = requests.put(
-            f"{RENDER_API_URL}/api/menu", 
-            json=data, 
-            headers=headers,
-            timeout=15
-        )
-        
-        print(f"Render 서버 응답 상태 코드: {response.status_code}")
-        print(f"Render 서버 응답 내용: {response.text[:200]}")
-        
-        if response.status_code == 200:
-            print("메뉴 데이터가 Render 서버에 저장되었습니다.")
-            return True
-        else:
-            print(f"Render 서버에 메뉴 데이터를 저장하는데 실패했습니다: {response.status_code}")
-            print(f"응답 내용: {response.text[:200]}")
-            return False
-    except requests.exceptions.RequestException as e:
-        print(f"Render 서버 요청 실패: {str(e)}")
-        import traceback
-        print("상세 오류:")
-        print(traceback.format_exc())
-        return False
-    except Exception as e:
-        print(f"Render 서버 연결 실패: {str(e)}")
-        import traceback
-        print("상세 오류:")
-        print(traceback.format_exc())
-        return False
-
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
     menu_data = load_menu_data()
@@ -552,16 +491,6 @@ def update_menu_order():
             save_menu_data(updated_menu_data)
             print("메뉴 데이터 저장 완료")
             
-            # Render 서버와 동기화 (로컬 환경에서만)
-            if not os.environ.get('RENDER'):
-                try:
-                    if save_menu_to_render(updated_menu_data):
-                        print("Render 서버와 동기화 완료")
-                    else:
-                        print("Render 서버와 동기화 실패")
-                except Exception as e:
-                    print(f"Render 서버 동기화 중 오류: {str(e)}")
-                    # Render 서버 동기화 실패는 무시하고 계속 진행
             
             # 응답 준비 - CORS 헤더는 after_request에서 추가됨
             response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': list(updated_menu_data.keys())})
@@ -583,23 +512,6 @@ def update_menu_order():
         print("상세 오류:")
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
-def sync_image_to_local(image_filename):
-    try:
-        if os.environ.get('RENDER'):
-            # Render 서버에서 이미지 다운로드
-            response = requests.get(f"{RENDER_API_URL}/static/images/{image_filename}")
-            if response.status_code == 200:
-                # 로컬에 이미지 저장
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
-                with open(filepath, 'wb') as f:
-                    f.write(response.content)
-                print(f"이미지 동기화 성공: {image_filename}")
-                return True
-        return False
-    except Exception as e:
-        print(f"이미지 동기화 실패: {str(e)}")
-        return False
 
 def create_default_logo():
     try:
