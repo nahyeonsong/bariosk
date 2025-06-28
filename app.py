@@ -199,10 +199,8 @@ def add_menu():
     menu_item = {
         'id': new_id,
         'name': data['name'],
-        'price': data['price'],
-        'image': data.get('image', 'logo.png'),
-        'temperature': data.get('temperature', ''),
-        'order_index': len(menu_data[category])
+        'price': int(data['price']),
+        'temperature': data.get('temperature', '')
     }
     menu_data[category].append(menu_item)
     save_menu_data(menu_data)
@@ -211,16 +209,16 @@ def add_menu():
 @app.route('/api/menu/<category>/<int:menu_id>', methods=['PUT'])
 def update_menu(menu_id, category):
     data = request.get_json() if request.is_json else request.form.to_dict()
+    if not data:
+        return jsonify({'error': '데이터가 없습니다.'}), 400
     menu_data = load_menu_data()
     if category not in menu_data:
         return jsonify({'error': '카테고리를 찾을 수 없습니다.'}), 404
     for item in menu_data[category]:
         if item['id'] == menu_id:
-            for key in ['name', 'price', 'image', 'temperature']:
-                if key in data:
-                    item[key] = data[key]
-            if 'image' not in data:
-                item['image'] = 'logo.png'
+            item['name'] = data.get('name', item['name'])
+            item['price'] = int(data.get('price', item['price']))
+            item['temperature'] = data.get('temperature', item.get('temperature', ''))
             save_menu_data(menu_data)
             return jsonify({'message': '메뉴가 수정되었습니다.', 'menu': item})
     return jsonify({'error': '메뉴를 찾을 수 없습니다.'}), 404
@@ -230,146 +228,12 @@ def delete_menu(menu_id, category):
     menu_data = load_menu_data()
     if category not in menu_data:
         return jsonify({'error': '카테고리를 찾을 수 없습니다.'}), 404
-    new_items = [item for item in menu_data[category] if item['id'] != menu_id]
-    if len(new_items) == len(menu_data[category]):
-        return jsonify({'error': '메뉴를 찾을 수 없습니다.'}), 404
-    menu_data[category] = new_items
-    save_menu_data(menu_data)
-    return jsonify({'message': '메뉴가 삭제되었습니다.'})
-
-def create_default_image(filename, text=""):
-    try:
-        print(f"기본 이미지 생성 시작: {filename}")
-        # 300x300 크기의 회색 배경 이미지 생성
-        img = Image.new('RGB', (300, 300), color='#EEEEEE')
-        
-        # 텍스트 추가 (있는 경우)
-        if text:
-            from PIL import ImageDraw, ImageFont
-            draw = ImageDraw.Draw(img)
-            # 기본 폰트 사용
-            try:
-                font_size = 40
-                font = ImageFont.truetype("Arial", font_size)
-            except:
-                font = ImageFont.load_default()
-            
-            # 텍스트 크기 측정
-            bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            
-            # 텍스트를 이미지 중앙에 배치
-            x = (300 - text_width) / 2
-            y = (300 - text_height) / 2
-            draw.text((x, y), text, font=font, fill='#666666')
-        
-        # 이미지를 JPEG로 변환
-        output = io.BytesIO()
-        img.save(output, format='JPEG', quality=85, optimize=True)
-        image_data = output.getvalue()
-        
-        
-        return filename
-        
-    except Exception as e:
-        print(f"이미지 저장 실패: {str(e)}")
-        return "static/images/logo.png"
-
-@app.route('/api/images/<filename>', methods=['GET', 'OPTIONS'])
-def serve_image(filename):
-    print(f"\n=== 이미지 요청 시작: {filename} ===")
-    print(f"요청 메서드: {request.method}")
-    print(f"요청 URL: {request.url}")
-    print(f"요청 Origin: {request.headers.get('Origin')}")
-    print(f"요청 헤더: {dict(request.headers)}")
-    
-    # OPTIONS 요청 처리
-    if request.method == 'OPTIONS':
-        print("OPTIONS 요청 처리")
-        response = app.make_default_options_response()
-        
-        # CORS 헤더 추가
-        origin = request.headers.get('Origin')
-        print(f"OPTIONS 요청의 Origin: {origin}")
-        
-        # 허용된 출처인지 확인
-        if origin in ALLOWED_ORIGINS:
-            print(f"허용된 Origin: {origin}")
-            response.headers['Access-Control-Allow-Origin'] = origin
-        else:
-            print(f"허용되지 않은 Origin: {origin}")
-            print(f"허용된 Origin 목록: {ALLOWED_ORIGINS}")
-            response.headers['Access-Control-Allow-Origin'] = ALLOWED_ORIGINS[0]
-            
-        response.headers.update({
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Max-Age': '3600',
-            'Access-Control-Expose-Headers': 'Content-Type, X-CSRFToken',
-            'Cross-Origin-Resource-Policy': 'cross-origin',
-            'Cross-Origin-Embedder-Policy': 'require-corp',
-            'Cross-Origin-Opener-Policy': 'same-origin',
-            'Timing-Allow-Origin': '*'
-        })
-        
-        print(f"OPTIONS 응답 헤더: {dict(response.headers)}")
-        print("=== OPTIONS 요청 처리 완료 ===\n")
-        return response
-        
-
-
-def create_and_serve_default_image(filename):
-    """기본 이미지를 생성하고 서빙하는 함수"""
-    try:
-        print(f"\n=== 기본 이미지 생성 시작: {filename} ===")
-        # 기본 이미지 생성 (회색 배경의 200x200 이미지)
-        img = Image.new('RGB', (200, 200), color='#CCCCCC')
-        
-        # 텍스트 추가
-        try:
-            from PIL import ImageDraw, ImageFont
-            draw = ImageDraw.Draw(img)
-            
-            # 기본 폰트 사용
-            try:
-                font_size = 20
-                font = ImageFont.truetype("Arial", font_size)
-            except:
-                print("Arial 폰트 로드 실패, 기본 폰트 사용")
-                font = ImageFont.load_default()
-            
-            # 파일명을 텍스트로 추가
-            text = filename.split('.')[0]  # 확장자 제거
-            bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            
-            # 텍스트를 이미지 중앙에 배치
-            x = (200 - text_width) / 2
-            y = (200 - text_height) / 2
-            draw.text((x, y), text, font=font, fill='#666666')
-            print("텍스트 추가 완료")
-            
-        except Exception as text_error:
-            print(f"텍스트 추가 실패: {str(text_error)}")
-        
-        # 이미지를 JPEG로 변환
-        output = io.BytesIO()
-        img.save(output, format='JPEG', quality=85, optimize=True)
-        image_data = output.getvalue()
-        print(f"이미지 변환 완료: {len(image_data)} bytes")
-        
-            
-    except Exception as e:
-        print(f"기본 이미지 생성 실패: {str(e)}")
-        import traceback
-        print("상세 오류:")
-        print(traceback.format_exc())
-        return jsonify({'error': '이미지를 생성할 수 없습니다.'}), 500
-    finally:
-        print(f"=== 기본 이미지 생성 종료: {filename} ===\n")
+    for i, item in enumerate(menu_data[category]):
+        if item['id'] == menu_id:
+            deleted_item = menu_data[category].pop(i)
+            save_menu_data(menu_data)
+            return jsonify({'message': '메뉴가 삭제되었습니다.', 'menu': deleted_item})
+    return jsonify({'error': '메뉴를 찾을 수 없습니다.'}), 404
 
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
@@ -378,47 +242,46 @@ def get_categories():
 
 @app.route('/api/categories', methods=['POST'])
 def add_category():
-    data = request.get_json()
-    name = data.get('name')
-    if not name:
+    data = request.get_json() if request.is_json else request.form.to_dict()
+    if not data or 'name' not in data:
         return jsonify({'error': '카테고리 이름이 필요합니다.'}), 400
     menu_data = load_menu_data()
-    if name in menu_data:
+    category_name = data['name']
+    if category_name in menu_data:
         return jsonify({'error': '이미 존재하는 카테고리입니다.'}), 400
-    menu_data[name] = []
+    menu_data[category_name] = []
     save_menu_data(menu_data)
-    return jsonify({'message': f'카테고리 {name} 추가됨'})
+    return jsonify({'message': '카테고리가 추가되었습니다.', 'category': category_name})
 
 @app.route('/api/categories/<category_name>', methods=['DELETE'])
 def delete_category(category_name):
     menu_data = load_menu_data()
     if category_name not in menu_data:
-        return jsonify({'error': '카테고리가 존재하지 않습니다.'}), 404
-    del menu_data[category_name]
+        return jsonify({'error': '카테고리를 찾을 수 없습니다.'}), 404
+    deleted_category = menu_data.pop(category_name)
     save_menu_data(menu_data)
-    return jsonify({'message': f'카테고리 {category_name} 삭제됨'})
+    return jsonify({'message': '카테고리가 삭제되었습니다.', 'category': category_name, 'deleted_items': deleted_category})
 
 @app.route('/api/categories/<category_name>', methods=['PUT'])
 def rename_category(category_name):
-    data = request.get_json()
-    new_name = data.get('name')
+    data = request.get_json() if request.is_json else request.form.to_dict()
+    if not data or 'new_name' not in data:
+        return jsonify({'error': '새 카테고리 이름이 필요합니다.'}), 400
     menu_data = load_menu_data()
     if category_name not in menu_data:
-        return jsonify({'error': '카테고리가 존재하지 않습니다.'}), 404
+        return jsonify({'error': '카테고리를 찾을 수 없습니다.'}), 404
+    new_name = data['new_name']
     if new_name in menu_data:
         return jsonify({'error': '이미 존재하는 카테고리 이름입니다.'}), 400
     menu_data[new_name] = menu_data.pop(category_name)
     save_menu_data(menu_data)
-    return jsonify({'message': f'카테고리 이름이 {category_name}에서 {new_name}으로 변경됨'})
+    return jsonify({'message': '카테고리가 이름이 변경되었습니다.', 'old_name': category_name, 'new_name': new_name})
 
-# 새로운 메뉴 ID 생성
 def generate_new_menu_id(menu_data):
-    max_id = 0
-    for category in menu_data.values():
-        for item in category:
-            if item['id'] > max_id:
-                max_id = item['id']
-    return max_id + 1
+    all_ids = []
+    for items in menu_data.values():
+        all_ids.extend([item['id'] for item in items])
+    return max(all_ids) + 1 if all_ids else 1
 
 @app.route('/styles.css')
 def serve_css():
@@ -430,216 +293,76 @@ def serve_js():
 
 @app.route('/api/menu', methods=['PUT'])
 def update_menu_order():
-    try:
-        new_menu_data = request.get_json()
-        if not new_menu_data:
-            return jsonify({'error': '메뉴 데이터가 필요합니다.'}), 400
+    data = request.get_json()
+    if not data or 'updates' not in data:
+        return jsonify({'error': '업데이트 데이터가 필요합니다.'}), 400
+    
+    menu_data = load_menu_data()
+    updates = data['updates']
+    
+    for update in updates:
+        old_category = update.get('old_category')
+        new_category = update.get('new_category')
+        menu_id = update.get('menu_id')
+        new_index = update.get('new_index')
         
-        print("=== 메뉴 순서 업데이트 시작 ===")
-        print(f"받은 메뉴 데이터: {new_menu_data}")
-        
-        # 기존 메뉴 데이터 로드
-        menu_data = load_menu_data()
-        print(f"기존 메뉴 데이터: {menu_data}")
-        
-        # 새로운 메뉴 데이터로 업데이트
-        updated_menu_data = {}
-        
-        # 각 카테고리의 메뉴에 order_index 추가
-        for category, items in new_menu_data.items():
-            updated_menu_data[category] = []
-            for index, item in enumerate(items):
-                try:
-                    item_id = int(item['id'])  # ID를 정수로 변환
-                    
-                    # 기존 메뉴 데이터에서 해당 항목 찾기
-                    existing_item = None
-                    if category in menu_data:
-                        for existing in menu_data[category]:
-                            if existing['id'] == item_id:
-                                existing_item = existing
-                                break
-                    
-                    if existing_item:
-                        # 기존 항목의 데이터를 유지하면서 order_index만 업데이트
-                        item_with_order = existing_item.copy()
-                        item_with_order['order_index'] = index
-                        updated_menu_data[category].append(item_with_order)
-                    else:
-                        # 새로운 항목인 경우 필수 필드 확인
-                        required_fields = ['name', 'price', 'image']
-                        if all(field in item for field in required_fields):
-                            item_with_order = {
-                                'id': item_id,
-                                'name': item['name'],
-                                'price': item['price'],
-                                'image': item.get('image', 'static/images/logo.png'),
-                                'temperature': item.get('temperature', ''),
-                                'order_index': index
-                            }
-                            updated_menu_data[category].append(item_with_order)
-                        else:
-                            print(f"필수 필드가 누락된 항목 무시: {item}")
-                except (KeyError, ValueError) as e:
-                    print(f"항목 처리 중 오류 발생: {str(e)}, 항목: {item}")
-                    continue
-        
-        print(f"순서가 추가된 메뉴 데이터: {updated_menu_data}")
-        
-        # 변경사항 저장
-        try:
-            save_menu_data(updated_menu_data)
-            print("메뉴 데이터 저장 완료")
+        if old_category and new_category and menu_id is not None:
+            # 기존 카테고리에서 메뉴 찾기
+            menu_item = None
+            if old_category in menu_data:
+                for i, item in enumerate(menu_data[old_category]):
+                    if item['id'] == menu_id:
+                        menu_item = menu_data[old_category].pop(i)
+                        break
             
-            
-            # 응답 준비 - CORS 헤더는 after_request에서 추가됨
-            response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': list(updated_menu_data.keys())})
-            
-            # 캐시 관련 헤더만 추가
-            response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
-            response.headers.add('Pragma', 'no-cache')
-            response.headers.add('Expires', '0')
-            
-            return response, 200
-            
-        except Exception as e:
-            print(f"메뉴 데이터 저장 중 오류: {str(e)}")
-            return jsonify({'error': '메뉴 순서 저장에 실패했습니다.'}), 500
-        
-    except Exception as e:
-        print(f"메뉴 순서 업데이트 중 오류 발생: {str(e)}")
-        import traceback
-        print("상세 오류:")
-        print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
-
-def create_default_logo():
-    try:
-        print("기본 로고 이미지 생성 시작")
-        # 기본 이미지 생성 (회색 배경의 200x200 이미지)
-        img = Image.new('RGB', (200, 200), color='#CCCCCC')
-        
-        # 이미지를 JPEG로 변환
-        output = io.BytesIO()
-        img.save(output, format='JPEG', quality=85, optimize=True, progressive=True)
-        image_data = output.getvalue()
-        
-        
-    except Exception as e:
-        print(f"기본 로고 이미지 생성 실패: {str(e)}")
-        import traceback
-        print("상세 오류:")
-        print(traceback.format_exc())
-        raise
-
-@app.route('/api/upload-image', methods=['POST'])
-def upload_image():
-    try:
-        if 'image' not in request.files:
-            return jsonify({'error': '이미지 파일이 없습니다.'}), 400
-        
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': '선택된 파일이 없습니다.'}), 400
-        
-        if file and allowed_file(file.filename):
-            filename = save_image(file)
-            return jsonify({'filename': filename}), 200
-        
-        return jsonify({'error': '허용되지 않는 파일 형식입니다.'}), 400
-        
-    except Exception as e:
-        print(f"이미지 업로드 중 오류 발생: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+            if menu_item:
+                # 새 카테고리에 추가
+                if new_category not in menu_data:
+                    menu_data[new_category] = []
+                
+                if new_index is not None and new_index <= len(menu_data[new_category]):
+                    menu_data[new_category].insert(new_index, menu_item)
+                else:
+                    menu_data[new_category].append(menu_item)
+    
+    save_menu_data(menu_data)
+    return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'})
 
 @app.route('/api/categories/order', methods=['GET', 'PUT', 'OPTIONS'])
 def update_category_order():
-    try:
-        print("=== 카테고리 순서 처리 시작 ===")
-        print(f"요청 메서드: {request.method}")
-        print(f"요청 헤더: {dict(request.headers)}")
-        
-        # OPTIONS 요청 처리
-        if request.method == 'OPTIONS':
-            response = app.make_default_options_response()
-            
-            # CORS 헤더 설정
-            origin = request.headers.get('Origin')
-            if origin in ALLOWED_ORIGINS:
-                response.headers['Access-Control-Allow-Origin'] = origin
-            else:
-                response.headers['Access-Control-Allow-Origin'] = ALLOWED_ORIGINS[0]
-                
-            response.headers.update({
-                'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Cache-Control, cache-control, Pragma',
-                'Access-Control-Allow-Credentials': 'true',
-                'Access-Control-Max-Age': '3600',
-                'Access-Control-Expose-Headers': 'Content-Type, X-CSRFToken, Cache-Control, cache-control, Expires, Last-Modified, ETag'
-            })
-            
-            print(f"OPTIONS 응답 헤더: {dict(response.headers)}")
-            return response
-            
-        
-        # PUT 요청 처리
+    if request.method == 'OPTIONS':
+        response = jsonify({'message': 'OK'})
+        return response
+    
+    if request.method == 'GET':
+        menu_data = load_menu_data()
+        categories = list(menu_data.keys())
+        return jsonify({'categories': categories})
+    
+    elif request.method == 'PUT':
         data = request.get_json()
-        print(f"받은 데이터: {data}")
-        
         if not data or 'categories' not in data:
-            return jsonify({'error': '카테고리 목록이 필요합니다.'}), 400
-            
-        categories = data['categories']
-        print(f"받은 카테고리 순서: {categories}")
+            return jsonify({'error': '카테고리 순서 데이터가 필요합니다.'}), 400
         
-        # 동기화 소스 확인 (무한 루프 방지)
-        sync_source = data.get('sync_source', None)
-        is_sync_request = sync_source is not None
+        menu_data = load_menu_data()
+        new_order = data['categories']
         
+        # 기존 카테고리 데이터 백업
+        old_data = menu_data.copy()
         
-            
-        # CORS 헤더 추가
-        response = jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': categories})
-            
-        # 캐시 관련 헤더만 추가
-        response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
-        response.headers.add('Pragma', 'no-cache')
-        response.headers.add('Expires', '0')
-            
-        return response, 200
-            
-    except Exception as e:
-        print(f"카테고리 순서 처리 중 오류 발생: {str(e)}")
-        import traceback
-        print("상세 오류:")
-        print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/add-logo', methods=['POST'])
-def add_logo():
-    try:
-        print("로고 이미지 추가 시작")
-        if 'image' not in request.files:
-            return jsonify({'error': '이미지 파일이 필요합니다.'}), 400
-
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': '선택된 파일이 없습니다.'}), 400
-
-        if file and allowed_file(file.filename):
-            save_path = os.path.join(app.config['UPLOAD_FOLDER'], 'logo.png')
-            file.save(save_path)
-            return jsonify({'message': '로고가 성공적으로 추가되었습니다.'}), 200
-
-        return jsonify({'error': '허용되지 않는 파일 형식입니다.'}), 400
-    except Exception as e:
-        print(f"로고 추가 중 오류 발생: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/upload.html')
-def serve_upload_page():
-    return send_from_directory('.', 'upload.html')
+        # 새 순서로 재구성
+        new_menu_data = {}
+        for category in new_order:
+            if category in old_data:
+                new_menu_data[category] = old_data[category]
+        
+        # 기존에 있던 카테고리 중 새 순서에 없는 것들도 추가
+        for category, items in old_data.items():
+            if category not in new_menu_data:
+                new_menu_data[category] = items
+        
+        save_menu_data(new_menu_data)
+        return jsonify({'message': '카테고리 순서가 업데이트되었습니다.', 'categories': list(new_menu_data.keys())})
 
 # 서버 실행
 if __name__ == '__main__':
