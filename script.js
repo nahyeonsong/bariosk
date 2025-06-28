@@ -137,7 +137,8 @@ async function apiRequest(endpoint, options = {}) {
             'Accept': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
-            'Expires': '0'
+            'Expires': '0',
+            'X-Requested-With': 'XMLHttpRequest'
         },
         mode: 'cors'
     };
@@ -159,10 +160,15 @@ async function apiRequest(endpoint, options = {}) {
         const API_BASE_URL = getApiBaseUrl();
         const timestamp = Date.now();
         const device = isMobileDevice() ? 'mobile' : 'pc';
-        const url = `${API_BASE_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}t=${timestamp}&device=${device}`;
+        const randomId = Math.random().toString(36).substring(7);
+        
+        // 더 강력한 캐시 무효화를 위한 파라미터
+        const url = `${API_BASE_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}t=${timestamp}&device=${device}&v=${randomId}&_=${Date.now()}`;
         
         console.log('API 요청 URL:', url);
         console.log('API 요청 옵션:', finalOptions);
+        console.log('디바이스:', device);
+        console.log('타임스탬프:', new Date(timestamp).toISOString());
 
         const response = await fetch(url, finalOptions);
         
@@ -175,7 +181,9 @@ async function apiRequest(endpoint, options = {}) {
         
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
-            return await response.json();
+            const data = await response.json();
+            console.log('API 응답 데이터:', data);
+            return data;
         } else {
             return response;
         }
@@ -357,6 +365,9 @@ async function initializeApp() {
         // 카테고리 순서 로드 및 적용
         await loadCategoriesAndUpdateDisplay();
         
+        // 데이터 동기화 기능 활성화
+        synchronizeDataWithServer();
+        
         console.log("=== 앱 초기화 완료 ===");
     } catch (error) {
         console.error("앱 초기화 중 오류:", error);
@@ -420,12 +431,15 @@ async function loadCategories() {
     console.log("=== 카테고리 데이터 로드 시작 ===");
     
     try {
-        const response = await apiRequest("/api/categories");
+        // 캐시 무효화를 위한 추가 파라미터
+        const cacheBuster = Date.now();
+        const response = await apiRequest(`/api/categories?_cb=${cacheBuster}`);
         console.log("카테고리 응답:", response);
         
         if (Array.isArray(response)) {
             const categories = response;
             console.log("로드된 카테고리:", categories);
+            console.log("카테고리 개수:", categories.length);
             
             // 카테고리 순서 업데이트
             updateCategorySelects(categories);
@@ -435,6 +449,7 @@ async function loadCategories() {
             try {
                 localStorage.setItem("bariosk_categories", JSON.stringify(categories));
                 localStorage.setItem("bariosk_categories_time", Date.now().toString());
+                console.log("카테고리 로컬 저장 완료");
             } catch (error) {
                 console.error("카테고리 로컬 저장 실패:", error);
             }
@@ -533,12 +548,24 @@ async function loadMenuData() {
     console.log("=== 메뉴 데이터 로드 시작 ===");
     
     try {
-        const response = await apiRequest("/api/menu");
+        // 캐시 무효화를 위한 추가 파라미터
+        const cacheBuster = Date.now();
+        const response = await apiRequest(`/api/menu?_cb=${cacheBuster}`);
         console.log("메뉴 응답:", response);
         
         if (response && typeof response === 'object') {
+            // 데이터 유효성 검사
+            const isValidData = Object.keys(response).length > 0 && 
+                               Object.values(response).some(items => Array.isArray(items) && items.length > 0);
+            
+            if (!isValidData) {
+                console.warn("서버에서 빈 메뉴 데이터를 받았습니다.");
+                throw new Error("서버에서 유효하지 않은 메뉴 데이터를 받았습니다.");
+            }
+            
             menuData = response;
             console.log("로드된 메뉴 데이터:", menuData);
+            console.log("메뉴 데이터 크기:", JSON.stringify(menuData).length, "bytes");
             
             // 로컬 스토리지에 백업
             try {
@@ -1332,15 +1359,72 @@ async function saveCategoryOrderToServer(categories) {
 function synchronizeDataWithServer() {
     console.log("=== 데이터 동기화 시작 ===");
     
-    // 주기적으로 서버와 데이터 동기화
+    // 주기적으로 서버와 데이터 동기화 (더 자주 체크)
     setInterval(async () => {
         try {
+            console.log("자동 데이터 동기화 실행 중...");
             await loadServerData(false);
-            console.log("데이터 동기화 완료");
+            console.log("자동 데이터 동기화 완료");
         } catch (error) {
-            console.error("데이터 동기화 실패:", error);
+            console.error("자동 데이터 동기화 실패:", error);
         }
-    }, 30000); // 30초마다 동기화
+    }, 15000); // 15초마다 동기화 (30초에서 단축)
+    
+    // 페이지 포커스 시 동기화
+    document.addEventListener('visibilitychange', async () => {
+        if (!document.hidden) {
+            console.log("페이지 포커스됨 - 데이터 동기화 실행");
+            try {
+                await loadServerData(false);
+            } catch (error) {
+                console.error("포커스 시 동기화 실패:", error);
+            }
+        }
+    });
+    
+    // 온라인 상태 복구 시 동기화
+    window.addEventListener('online', async () => {
+        console.log("네트워크 연결 복구됨 - 데이터 동기화 실행");
+        try {
+            await forceRefreshData();
+        } catch (error) {
+            console.error("온라인 복구 시 동기화 실패:", error);
+        }
+    });
+}
+
+// 강제 새로고침 함수 (모바일/PC 데이터 동기화용)
+async function forceRefreshData() {
+    console.log("=== 강제 새로고침 시작 ===");
+    
+    try {
+        // 로컬 스토리지 캐시 클리어
+        localStorage.removeItem("bariosk_menu_data");
+        localStorage.removeItem("bariosk_menu_data_time");
+        localStorage.removeItem("bariosk_categories");
+        localStorage.removeItem("bariosk_categories_time");
+        localStorage.removeItem("bariosk_category_order");
+        
+        // 브라우저 캐시 무효화를 위한 추가 헤더
+        const cacheBuster = Date.now();
+        
+        console.log("로컬 캐시 클리어 완료");
+        console.log("캐시 무효화 타임스탬프:", cacheBuster);
+        
+        // 서버에서 최신 데이터 로드 (강제 새로고침)
+        await loadServerData(true);
+        
+        // UI 완전 새로고침
+        updateMenuDisplay();
+        updateAdminMenuGrid();
+        
+        showNetworkMessage("데이터 새로고침 완료 - 모든 캐시 클리어됨");
+        console.log("=== 강제 새로고침 완료 ===");
+        
+    } catch (error) {
+        console.error("강제 새로고침 실패:", error);
+        showNetworkMessage("새로고침 실패: " + error.message);
+    }
 }
 
 // 오프라인 알림 표시 함수
@@ -1351,9 +1435,58 @@ function showOfflineNotification() {
 
 // 네트워크 메시지 표시 함수
 function showNetworkMessage(message) {
-    // 간단한 알림 표시 (필요시 더 정교한 UI로 개선 가능)
+    // 기존 메시지 제거
+    const existingMessage = document.getElementById('networkMessage');
+    if (existingMessage) {
+        existingMessage.remove();
+    }
+    
+    // 새 메시지 생성
+    const messageDiv = document.createElement('div');
+    messageDiv.id = 'networkMessage';
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #007bff;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        max-width: 300px;
+        word-wrap: break-word;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    // 애니메이션 스타일 추가
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    messageDiv.textContent = message;
+    document.body.appendChild(messageDiv);
+    
+    // 3초 후 자동 제거
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.style.animation = 'slideOut 0.3s ease-in';
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 300);
+        }
+    }, 3000);
+    
+    // 콘솔에도 로그
     console.log("네트워크 메시지:", message);
-    // alert(message); // 사용자에게 알림 표시 (선택사항)
 }
 
 // 탭 전환 함수
@@ -1413,35 +1546,5 @@ async function deleteCategory(categoryName) {
     } catch (error) {
         console.error("카테고리 삭제 실패:", error);
         alert("카테고리 삭제에 실패했습니다.");
-    }
-}
-
-// 강제 새로고침 함수 (모바일/PC 데이터 동기화용)
-async function forceRefreshData() {
-    console.log("=== 강제 새로고침 시작 ===");
-    
-    try {
-        // 로컬 스토리지 캐시 클리어
-        localStorage.removeItem("bariosk_menu_data");
-        localStorage.removeItem("bariosk_menu_data_time");
-        localStorage.removeItem("bariosk_categories");
-        localStorage.removeItem("bariosk_categories_time");
-        localStorage.removeItem("bariosk_category_order");
-        
-        console.log("로컬 캐시 클리어 완료");
-        
-        // 서버에서 최신 데이터 로드
-        await loadServerData(true);
-        
-        // UI 완전 새로고침
-        updateMenuDisplay();
-        updateAdminMenuGrid();
-        
-        showNetworkMessage("데이터 새로고침 완료");
-        console.log("=== 강제 새로고침 완료 ===");
-        
-    } catch (error) {
-        console.error("강제 새로고침 실패:", error);
-        showNetworkMessage("새로고침 실패: " + error.message);
     }
 }
