@@ -320,6 +320,22 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // 데이터 새로고침 버튼 이벤트 리스너
+    const refreshDataBtn = document.getElementById("refreshDataBtn");
+    if (refreshDataBtn) {
+        refreshDataBtn.addEventListener("click", async () => {
+            refreshDataBtn.disabled = true;
+            refreshDataBtn.textContent = "🔄 새로고침 중...";
+            
+            try {
+                await forceRefreshData();
+            } finally {
+                refreshDataBtn.disabled = false;
+                refreshDataBtn.textContent = "🔄 새로고침";
+            }
+        });
+    }
+
     // 주문서 출력 버튼 이벤트 리스너
     const checkoutBtn = document.getElementById("checkoutBtn");
     if (checkoutBtn) {
@@ -351,6 +367,8 @@ async function initializeApp() {
 // 서버 데이터 로드 함수
 async function loadServerData(isInitialLoad = true) {
     console.log("=== 서버 데이터 로드 시작 ===");
+    console.log("디바이스:", isMobileDevice() ? "모바일" : "PC");
+    console.log("네트워크 상태:", checkNetworkConnection() ? "연결됨" : "연결 안됨");
     
     try {
         // 메뉴 데이터 로드
@@ -361,6 +379,8 @@ async function loadServerData(isInitialLoad = true) {
         
         if (isInitialLoad) {
             console.log("초기 로드 완료");
+            // 데이터 동기화 상태 표시
+            showNetworkMessage("서버와 동기화 완료");
         }
         
         console.log("=== 서버 데이터 로드 완료 ===");
@@ -378,6 +398,7 @@ async function loadServerData(isInitialLoad = true) {
             if (localMenuData) {
                 menuData = JSON.parse(localMenuData);
                 console.log("로컬 메뉴 데이터 복원됨");
+                showNetworkMessage("오프라인 모드: 로컬 데이터 사용 중");
             }
             
             if (localCategories) {
@@ -523,6 +544,7 @@ async function loadMenuData() {
             try {
                 localStorage.setItem("bariosk_menu_data", JSON.stringify(menuData));
                 localStorage.setItem("bariosk_menu_data_time", Date.now().toString());
+                console.log("메뉴 데이터 로컬 저장 완료");
             } catch (error) {
                 console.error("메뉴 데이터 로컬 저장 실패:", error);
             }
@@ -533,26 +555,26 @@ async function loadMenuData() {
             console.log("=== 메뉴 데이터 로드 완료 ===");
             return menuData;
         } else {
-            console.error("메뉴 응답이 객체가 아님:", response);
-            return {};
+            console.error("메뉴 응답이 유효하지 않음:", response);
+            throw new Error("서버에서 유효하지 않은 메뉴 데이터를 받았습니다.");
         }
     } catch (error) {
-        console.error("메뉴 로드 실패:", error);
+        console.error("메뉴 데이터 로드 실패:", error);
         
         // 로컬 스토리지에서 복원 시도
-        try {
-            const localMenuData = localStorage.getItem("bariosk_menu_data");
-            if (localMenuData) {
+        const localMenuData = localStorage.getItem("bariosk_menu_data");
+        if (localMenuData) {
+            try {
                 menuData = JSON.parse(localMenuData);
                 console.log("로컬 메뉴 데이터 복원됨");
                 updateMenuDisplay();
                 return menuData;
+            } catch (parseError) {
+                console.error("로컬 메뉴 데이터 파싱 실패:", parseError);
             }
-        } catch (localError) {
-            console.error("로컬 메뉴 데이터 복원 실패:", localError);
         }
         
-        return {};
+        throw error;
     }
 }
 
@@ -1391,5 +1413,35 @@ async function deleteCategory(categoryName) {
     } catch (error) {
         console.error("카테고리 삭제 실패:", error);
         alert("카테고리 삭제에 실패했습니다.");
+    }
+}
+
+// 강제 새로고침 함수 (모바일/PC 데이터 동기화용)
+async function forceRefreshData() {
+    console.log("=== 강제 새로고침 시작 ===");
+    
+    try {
+        // 로컬 스토리지 캐시 클리어
+        localStorage.removeItem("bariosk_menu_data");
+        localStorage.removeItem("bariosk_menu_data_time");
+        localStorage.removeItem("bariosk_categories");
+        localStorage.removeItem("bariosk_categories_time");
+        localStorage.removeItem("bariosk_category_order");
+        
+        console.log("로컬 캐시 클리어 완료");
+        
+        // 서버에서 최신 데이터 로드
+        await loadServerData(true);
+        
+        // UI 완전 새로고침
+        updateMenuDisplay();
+        updateAdminMenuGrid();
+        
+        showNetworkMessage("데이터 새로고침 완료");
+        console.log("=== 강제 새로고침 완료 ===");
+        
+    } catch (error) {
+        console.error("강제 새로고침 실패:", error);
+        showNetworkMessage("새로고침 실패: " + error.message);
     }
 }
