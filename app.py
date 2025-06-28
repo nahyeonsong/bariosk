@@ -183,24 +183,35 @@ def index():
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
     menu_data = load_menu_data()
-    return jsonify(menu_data)
+    # 각 카테고리별로 order_index 순으로 정렬
+    sorted_menu_data = {}
+    for category, items in menu_data.items():
+        sorted_items = sorted(items, key=lambda x: x.get('order_index', 0))
+        sorted_menu_data[category] = sorted_items
+    return jsonify(sorted_menu_data)
 
 @app.route('/api/menu', methods=['POST'])
 def add_menu():
     data = request.get_json() if request.is_json else request.form.to_dict()
     if not data or 'category' not in data or 'name' not in data or 'price' not in data:
         return jsonify({'error': '필수 정보가 누락되었습니다.'}), 400
+    
     menu_data = load_menu_data()
     category = data['category']
     if category not in menu_data:
         menu_data[category] = []
+    
     # 새 id 생성
-    new_id = max([item['id'] for items in menu_data.values() for item in items] or [0]) + 1
+    new_id = generate_new_menu_id(menu_data)
+    # 새 순서 번호 생성
+    order_index = get_next_order_index(menu_data, category)
+    
     menu_item = {
         'id': new_id,
         'name': data['name'],
         'price': int(data['price']),
-        'temperature': data.get('temperature', '')
+        'temperature': data.get('temperature', ''),
+        'order_index': order_index
     }
     menu_data[category].append(menu_item)
     save_menu_data(menu_data)
@@ -219,6 +230,9 @@ def update_menu(menu_id, category):
             item['name'] = data.get('name', item['name'])
             item['price'] = int(data.get('price', item['price']))
             item['temperature'] = data.get('temperature', item.get('temperature', ''))
+            # order_index도 업데이트 가능
+            if 'order_index' in data:
+                item['order_index'] = int(data['order_index'])
             save_menu_data(menu_data)
             return jsonify({'message': '메뉴가 수정되었습니다.', 'menu': item})
     return jsonify({'error': '메뉴를 찾을 수 없습니다.'}), 404
@@ -283,6 +297,14 @@ def generate_new_menu_id(menu_data):
         all_ids.extend([item['id'] for item in items])
     return max(all_ids) + 1 if all_ids else 1
 
+def get_next_order_index(menu_data, category):
+    """카테고리 내에서 다음 순서 번호를 반환"""
+    if category not in menu_data or not menu_data[category]:
+        return 1
+    
+    max_order = max([item.get('order_index', 0) for item in menu_data[category]])
+    return max_order + 1
+
 @app.route('/styles.css')
 def serve_css():
     return send_from_directory('.', 'styles.css')
@@ -291,8 +313,9 @@ def serve_css():
 def serve_js():
     return send_from_directory('.', 'script.js')
 
-@app.route('/api/menu', methods=['PUT'])
+@app.route('/api/menu/order', methods=['PUT'])
 def update_menu_order():
+    """메뉴 순서를 일괄 업데이트"""
     data = request.get_json()
     if not data or 'updates' not in data:
         return jsonify({'error': '업데이트 데이터가 필요합니다.'}), 400
@@ -301,29 +324,16 @@ def update_menu_order():
     updates = data['updates']
     
     for update in updates:
-        old_category = update.get('old_category')
-        new_category = update.get('new_category')
         menu_id = update.get('menu_id')
-        new_index = update.get('new_index')
+        category = update.get('category')
+        order_index = update.get('order_index')
         
-        if old_category and new_category and menu_id is not None:
-            # 기존 카테고리에서 메뉴 찾기
-            menu_item = None
-            if old_category in menu_data:
-                for i, item in enumerate(menu_data[old_category]):
+        if menu_id is not None and category and order_index is not None:
+            if category in menu_data:
+                for item in menu_data[category]:
                     if item['id'] == menu_id:
-                        menu_item = menu_data[old_category].pop(i)
+                        item['order_index'] = int(order_index)
                         break
-            
-            if menu_item:
-                # 새 카테고리에 추가
-                if new_category not in menu_data:
-                    menu_data[new_category] = []
-                
-                if new_index is not None and new_index <= len(menu_data[new_category]):
-                    menu_data[new_category].insert(new_index, menu_item)
-                else:
-                    menu_data[new_category].append(menu_item)
     
     save_menu_data(menu_data)
     return jsonify({'message': '메뉴 순서가 업데이트되었습니다.'})

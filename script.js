@@ -76,7 +76,6 @@ let cart = [];
 let menuData = {};
 let categoryDraggedItem = null;
 let categoryDragStartIndex = null;
-let menuDraggedItem = null;
 
 // 요청 타임아웃 설정
 const REQUEST_TIMEOUT = 10000; // 15초에서 10초로 변경하여 모바일에서 응답성 향상
@@ -223,6 +222,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 price: formData.get("price"),
                 temperature: formData.get("temperature")
             };
+            
+            // 순서가 입력된 경우에만 추가
+            const orderIndex = formData.get("orderIndex");
+            if (orderIndex) {
+                menuData.order_index = parseInt(orderIndex);
+            }
 
             try {
                 const response = await apiRequest("/api/menu", {
@@ -252,6 +257,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 price: formData.get("price"),
                 temperature: formData.get("temperature")
             };
+            
+            // 순서가 입력된 경우에만 추가
+            const orderIndex = formData.get("orderIndex");
+            if (orderIndex) {
+                menuData.order_index = parseInt(orderIndex);
+            }
 
             try {
                 const response = await apiRequest(`/api/menu/${category}/${menuId}`, {
@@ -619,8 +630,12 @@ function updateMenuDisplay(sortedCategories = null) {
         const menuGrid = document.createElement("div");
         menuGrid.className = "menu-grid";
         
-        // 해당 카테고리의 메뉴 아이템들 렌더링
-        menuData[category].forEach(item => {
+        // 해당 카테고리의 메뉴 아이템들 렌더링 (order_index 순으로 정렬)
+        const sortedItems = [...menuData[category]].sort((a, b) => 
+            (a.order_index || 0) - (b.order_index || 0)
+        );
+        
+        sortedItems.forEach(item => {
             const menuItem = createMenuItem(item);
             menuGrid.appendChild(menuItem);
         });
@@ -661,10 +676,14 @@ function updateAdminMenuGrid() {
     menuGrid.innerHTML = "";
     
     Object.keys(menuData).forEach(category => {
-        menuData[category].forEach(item => {
+        // order_index 순으로 정렬
+        const sortedItems = [...menuData[category]].sort((a, b) => 
+            (a.order_index || 0) - (b.order_index || 0)
+        );
+        
+        sortedItems.forEach(item => {
             const menuItem = document.createElement("div");
             menuItem.className = "admin-menu-item";
-            menuItem.draggable = true;
             menuItem.setAttribute("data-id", item.id);
             menuItem.setAttribute("data-category", category);
             
@@ -676,6 +695,7 @@ function updateAdminMenuGrid() {
                     <h3>${item.name}${temperatureDisplay}</h3>
                     <p>${item.price}원</p>
                     <p>카테고리: ${category}</p>
+                    <p>순서: ${item.order_index || 1}</p>
                 </div>
                 <div class="menu-actions">
                     <button onclick="showEditForm(${item.id}, '${category}')">수정</button>
@@ -683,14 +703,6 @@ function updateAdminMenuGrid() {
                     <button onclick="cloneMenuItem(${item.id}, '${category}')">복제</button>
                 </div>
             `;
-            
-            // 드래그 이벤트 리스너 추가
-            menuItem.addEventListener("dragstart", handleDragStart);
-            menuItem.addEventListener("dragover", handleDragOver);
-            menuItem.addEventListener("dragenter", handleDragEnter);
-            menuItem.addEventListener("dragleave", handleDragLeave);
-            menuItem.addEventListener("dragend", handleDragEnd);
-            menuItem.addEventListener("drop", handleDrop);
             
             menuGrid.appendChild(menuItem);
         });
@@ -739,23 +751,6 @@ async function deleteMenuItem(menuId, category) {
     }
 }
 
-// 드래그 앤 드롭 이벤트 핸들러들
-function handleDrop(e) {
-    e.preventDefault();
-    const draggedItem = menuDraggedItem;
-    const targetItem = e.target.closest('.admin-menu-item');
-    
-    if (draggedItem && targetItem) {
-        const draggedId = parseInt(draggedItem.getAttribute('data-id'));
-        const draggedCategory = draggedItem.getAttribute('data-category');
-        const targetId = parseInt(targetItem.getAttribute('data-id'));
-        const targetCategory = targetItem.getAttribute('data-category');
-        
-        // 메뉴 순서 업데이트 로직
-        updateMenuOrder(draggedId, draggedCategory, targetId, targetCategory);
-    }
-}
-
 // 메뉴 아이템 생성 함수
 function createMenuItem(item) {
     const menuItem = document.createElement("div");
@@ -789,6 +784,7 @@ function showEditForm(menu, category) {
     document.getElementById("editName").value = menu.name;
     document.getElementById("editPrice").value = menu.price;
     document.getElementById("editTemperature").value = menu.temperature || "";
+    document.getElementById("editOrderIndex").value = menu.order_index || 1;
     
     // 폼 표시 전환
     addForm.style.display = "none";
@@ -870,53 +866,185 @@ async function generateReceipt() {
         return;
     }
     
-    const receiptWindow = window.open("", "_blank");
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const currentDate = new Date();
+    const dateStr = currentDate.toLocaleDateString('ko-KR', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+    });
+    const timeStr = currentDate.toLocaleTimeString('ko-KR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
     
+    // 주문서 HTML 생성
     const receiptHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>주문서 - Bariosk</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .receipt { max-width: 400px; margin: 0 auto; }
-                .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-                .item { display: flex; justify-content: space-between; margin: 5px 0; }
-                .total { border-top: 1px solid #000; padding-top: 10px; margin-top: 20px; font-weight: bold; }
-                .footer { text-align: center; margin-top: 30px; font-size: 12px; }
-            </style>
-        </head>
-        <body>
-            <div class="receipt">
-                <div class="header">
-                    <h1>Bariosk</h1>
-                    <p>주문서</p>
-                    <p>${new Date().toLocaleString()}</p>
-                </div>
-                ${cart.map(item => `
-                    <div class="item">
-                        <span>${item.name} x${item.quantity}</span>
-                        <span>${item.price * item.quantity}원</span>
-                    </div>
-                `).join('')}
-                <div class="total">
-                    <div class="item">
-                        <span>총 금액</span>
-                        <span>${total}원</span>
-                    </div>
-                </div>
-                <div class="footer">
-                    <p>감사합니다!</p>
+        <div style="
+            font-family: 'Courier New', monospace;
+            width: 400px;
+            min-height: 600px;
+            background-color: #ffffff;
+            padding: 30px;
+            box-sizing: border-box;
+            border: 2px solid #000;
+            border-radius: 8px;
+        ">
+            <!-- 헤더 -->
+            <div style="
+                text-align: center;
+                border-bottom: 2px dashed #000;
+                padding-bottom: 20px;
+                margin-bottom: 20px;
+            ">
+                <h1 style="
+                    margin: 0 0 5px 0;
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #000;
+                    letter-spacing: 2px;
+                ">BARIOSK</h1>
+                <p style="
+                    margin: 0 0 10px 0;
+                    font-size: 14px;
+                    color: #333;
+                    font-weight: bold;
+                ">영수증</p>
+                <div style="
+                    font-size: 12px;
+                    color: #666;
+                    line-height: 1.4;
+                ">
+                    <div>📅 ${dateStr}</div>
+                    <div>🕐 ${timeStr}</div>
                 </div>
             </div>
-        </body>
-        </html>
+
+            <!-- 메뉴 목록 -->
+            <div style="margin-bottom: 20px;">
+                <div style="
+                    border-bottom: 1px solid #000;
+                    padding-bottom: 5px;
+                    margin-bottom: 15px;
+                    font-weight: bold;
+                    font-size: 14px;
+                ">
+                    주문 내역
+                </div>
+                
+                ${cart.map((item, index) => `
+                    <div style="
+                        margin-bottom: 12px;
+                        padding-bottom: 8px;
+                        border-bottom: 1px dotted #ccc;
+                    ">
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            margin-bottom: 4px;
+                        ">
+                            <span style="
+                                font-weight: bold;
+                                font-size: 14px;
+                                color: #000;
+                            ">${item.name}</span>
+                            <span style="
+                                font-weight: bold;
+                                font-size: 14px;
+                                color: #000;
+                            ">${(item.price * item.quantity).toLocaleString()}원</span>
+                        </div>
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            font-size: 12px;
+                            color: #666;
+                        ">
+                            <span>수량: ${item.quantity}개</span>
+                            <span>단가: ${item.price.toLocaleString()}원</span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+
+            <!-- 총액 -->
+            <div style="
+                border-top: 2px dashed #000;
+                padding-top: 20px;
+                margin-bottom: 20px;
+            ">
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-weight: bold;
+                    font-size: 16px;
+                    color: #000;
+                    margin-bottom: 15px;
+                ">
+                    <span>총 결제 금액</span>
+                    <span>${total.toLocaleString()}원</span>
+                </div>
+            </div>
+
+            <!-- 푸터 -->
+            <div style="
+                text-align: center;
+                border-top: 1px solid #000;
+                padding-top: 20px;
+                font-size: 12px;
+                color: #666;
+                line-height: 1.4;
+            ">
+                <div style="margin-bottom: 5px;">감사합니다!</div>
+                <div>Bariosk 카페</div>
+                <div style="margin-top: 10px; font-size: 10px;">
+                    이용해 주셔서 감사합니다
+                </div>
+            </div>
+        </div>
     `;
     
-    receiptWindow.document.write(receiptHTML);
-    receiptWindow.document.close();
-    receiptWindow.print();
+    // 임시 div 생성하여 주문서 HTML 삽입
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = receiptHTML;
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.top = '0';
+    document.body.appendChild(tempDiv);
+    
+    try {
+        // html2canvas를 사용하여 이미지 생성
+        const canvas = await html2canvas(tempDiv.firstElementChild, {
+            backgroundColor: '#ffffff',
+            scale: 2, // 고해상도 이미지 생성
+            width: 460,
+            height: 700,
+            useCORS: true,
+            allowTaint: true,
+            logging: false
+        });
+        
+        // Canvas를 Blob으로 변환
+        canvas.toBlob((blob) => {
+            // 다운로드 링크 생성
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `bariosk_receipt_${currentDate.toISOString().slice(0, 19).replace(/:/g, '-')}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 'image/jpeg', 0.95);
+        
+    } catch (error) {
+        console.error('주문서 이미지 생성 실패:', error);
+        alert('주문서 이미지 생성에 실패했습니다.');
+    } finally {
+        // 임시 div 제거
+        document.body.removeChild(tempDiv);
+    }
 }
 
 // 메뉴 이벤트 리스너 추가 함수
@@ -939,29 +1067,6 @@ function findMenuById(menuId) {
         if (item) return item;
     }
     return null;
-}
-
-// 드래그 이벤트 핸들러들
-function handleDragStart(e) {
-    menuDraggedItem = e.target;
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-}
-
-function handleDragEnter(e) {
-    e.preventDefault();
-}
-
-function handleDragLeave() {
-    // 드래그 리브 이벤트 처리
-}
-
-function handleDragEnd() {
-    menuDraggedItem = null;
 }
 
 // 카테고리 드래그 이벤트 핸들러들
@@ -1202,28 +1307,5 @@ async function deleteCategory(categoryName) {
     } catch (error) {
         console.error("카테고리 삭제 실패:", error);
         alert("카테고리 삭제에 실패했습니다.");
-    }
-}
-
-// 메뉴 순서 업데이트 함수
-async function updateMenuOrder(draggedId, draggedCategory, targetId, targetCategory) {
-    try {
-        const updates = [{
-            old_category: draggedCategory,
-            new_category: targetCategory,
-            menu_id: draggedId,
-            new_index: null
-        }];
-        
-        const response = await apiRequest("/api/menu", {
-            method: "PUT",
-            body: JSON.stringify({ updates: updates })
-        });
-        
-        console.log("메뉴 순서 업데이트 성공:", response);
-        await loadMenuData();
-    } catch (error) {
-        console.error("메뉴 순서 업데이트 실패:", error);
-        alert("메뉴 순서 변경에 실패했습니다.");
     }
 }

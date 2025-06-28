@@ -767,3 +767,69 @@ footer {
         gap: 1rem;
     }
 }
+
+.form-group small {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.admin-menu-item {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.admin-menu-item .menu-info {
+    flex-grow: 1;
+}
+
+.admin-menu-item .menu-info h3 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+}
+
+.admin-menu-item .menu-info p {
+    margin: 0.25rem 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.admin-menu-item .menu-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.admin-menu-item .menu-actions button {
+    background: none;
+    border: 1px solid #ddd;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background-color 0.2s;
+}
+
+.admin-menu-item .menu-actions button:hover {
+    background-color: #f0f0f0;
+}
+
+.admin-menu-item .menu-actions button:first-child {
+    color: #2196f3;
+}
+
+.admin-menu-item .menu-actions button:nth-child(2) {
+    color: #f44336;
+}
+
+.admin-menu-item .menu-actions button:last-child {
+    color: #4caf50;
+}

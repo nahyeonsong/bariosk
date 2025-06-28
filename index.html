@@ -32,7 +32,7 @@
                                 class="checkout-btn"
                                 disabled
                             >
-                                주문서 출력
+                                이미지 다운로드
                             </button>
                             <button id="clearCartBtn" class="clear-cart-btn">
                                 장바구니 비우기
@@ -94,6 +94,17 @@
                                 required
                             />
                         </div>
+                        <div class="form-group">
+                            <label for="orderIndex">순서</label>
+                            <input
+                                type="number"
+                                id="orderIndex"
+                                name="orderIndex"
+                                min="1"
+                                placeholder="자동 설정"
+                            />
+                            <small>비워두면 자동으로 마지막 순서에 추가됩니다.</small>
+                        </div>
                         <button type="submit">메뉴 추가</button>
                     </form>
 
@@ -120,6 +131,15 @@
                         <div class="form-group">
                             <label for="editPrice">가격</label>
                             <input type="number" id="editPrice" name="price" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="editOrderIndex">순서</label>
+                            <input
+                                type="number"
+                                id="editOrderIndex"
+                                name="orderIndex"
+                                min="1"
+                            />
                         </div>
                         <button type="submit">메뉴 수정</button>
                         <button type="button" id="cancelEdit">취소</button>
