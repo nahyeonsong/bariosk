@@ -1027,15 +1027,99 @@ async function generateReceipt() {
         
         // Canvas를 Blob으로 변환
         canvas.toBlob((blob) => {
-            // 다운로드 링크 생성
+            // 모바일과 데스크톱 모두 지원하는 다운로드 방식
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.download = `bariosk_receipt_${currentDate.toISOString().slice(0, 19).replace(/:/g, '-')}.jpg`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            
+            // 모바일에서 다운로드 속성이 작동하지 않을 경우를 대비
+            if (isMobileDevice()) {
+                // 모바일에서는 새 탭에서 열기
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                
+                // iOS Safari를 위한 특별 처리
+                if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                    // iOS에서는 이미지를 새 창에서 열고 사용자가 수동으로 저장하도록 함
+                    const newWindow = window.open();
+                    newWindow.document.write(`
+                        <html>
+                            <head>
+                                <title>Bariosk 영수증</title>
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                <style>
+                                    body { 
+                                        margin: 0; 
+                                        padding: 20px; 
+                                        background: #f5f5f5; 
+                                        font-family: Arial, sans-serif;
+                                    }
+                                    .receipt-container {
+                                        max-width: 100%;
+                                        margin: 0 auto;
+                                        background: white;
+                                        border-radius: 8px;
+                                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                                        overflow: hidden;
+                                    }
+                                    .receipt-image {
+                                        width: 100%;
+                                        height: auto;
+                                        display: block;
+                                    }
+                                    .download-info {
+                                        text-align: center;
+                                        padding: 20px;
+                                        background: white;
+                                        margin-top: 20px;
+                                        border-radius: 8px;
+                                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                                    }
+                                    .download-btn {
+                                        background: #007AFF;
+                                        color: white;
+                                        border: none;
+                                        padding: 12px 24px;
+                                        border-radius: 6px;
+                                        font-size: 16px;
+                                        cursor: pointer;
+                                        margin: 10px;
+                                    }
+                                    .download-btn:hover {
+                                        background: #0056CC;
+                                    }
+                                </style>
+                            </head>
+                            <body>
+                                <div class="receipt-container">
+                                    <img src="${url}" alt="Bariosk 영수증" class="receipt-image">
+                                </div>
+                                <div class="download-info">
+                                    <p>영수증을 저장하려면 이미지를 길게 누르고 "이미지 저장"을 선택하세요.</p>
+                                    <button class="download-btn" onclick="window.print()">인쇄하기</button>
+                                </div>
+                            </body>
+                        </html>
+                    `);
+                    newWindow.document.close();
+                } else {
+                    // 안드로이드 등 다른 모바일 브라우저
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            } else {
+                // 데스크톱에서는 기존 방식 사용
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            
+            // 메모리 정리
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+            }, 1000);
         }, 'image/jpeg', 0.95);
         
     } catch (error) {
