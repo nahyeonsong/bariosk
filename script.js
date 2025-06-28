@@ -8,20 +8,86 @@ function isMobileDevice() {
     );
 }
 
-// 네트워크 연결 확인 함수
-function checkNetworkConnection() {
+// 네트워크 연결 상태 확인 함수 (모바일 호환)
+async function checkNetworkConnection() {
+    // 기본 온라인 상태 확인
+    if (!navigator.onLine) {
+        console.log("navigator.onLine: false");
+        return false;
+    }
+    
+    // 모바일에서는 실제 연결 테스트 수행
+    if (isMobileDevice()) {
+        try {
+            console.log("모바일에서 실제 네트워크 연결 테스트 수행");
+            
+            // 실제 API 서버 연결 테스트 (더 안정적)
+            const API_BASE_URL = "https://bariosk.onrender.com";
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5초 타임아웃
+            
+            const response = await fetch(`${API_BASE_URL}/api/menu`, {
+                method: 'HEAD',
+                mode: 'cors',
+                signal: controller.signal,
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+            
+            clearTimeout(timeoutId);
+            console.log("모바일 API 서버 연결 테스트 성공");
+            return true;
+            
+        } catch (error) {
+            console.log("모바일 API 서버 연결 테스트 실패:", error.message);
+            
+            // 대체 방법: 간단한 이미지 로드 테스트
+            try {
+                const testImage = new Image();
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                
+                await new Promise((resolve, reject) => {
+                    testImage.onload = resolve;
+                    testImage.onerror = reject;
+                    testImage.src = 'https://www.google.com/favicon.ico?_=' + Date.now();
+                    
+                    setTimeout(() => {
+                        if (testImage.complete) {
+                            resolve();
+                        } else {
+                            reject(new Error('이미지 로드 타임아웃'));
+                        }
+                    }, 3000);
+                });
+                
+                clearTimeout(timeoutId);
+                console.log("모바일 이미지 로드 테스트 성공");
+                return true;
+                
+            } catch (imgError) {
+                console.log("모바일 이미지 로드 테스트 실패:", imgError.message);
+                return false;
+            }
+        }
+    }
+    
+    // PC에서는 기본 온라인 상태만 확인
+    console.log("PC에서 기본 온라인 상태 확인:", navigator.onLine);
     return navigator.onLine;
 }
 
 // API 기본 URL 결정 함수
-function getApiBaseUrl() {
+async function getApiBaseUrl() {
     const hostname = window.location.hostname;
     console.log("현재 호스트명:", hostname);
     console.log("모바일 기기 여부:", isMobileDevice());
-    console.log(
-        "네트워크 연결 상태:",
-        checkNetworkConnection() ? "연결됨" : "연결 안됨"
-    );
+    
+    // 네트워크 연결 상태 확인
+    const isOnline = await checkNetworkConnection();
+    console.log("네트워크 연결 상태:", isOnline ? "연결됨" : "연결 안됨");
 
     // 모든 환경에서 Render 서버 사용 (로컬/Render 데이터 통합)
     const FORCE_RENDER_SERVER = true; // true로 설정하면 모든 환경에서 Render 서버 사용
@@ -30,7 +96,7 @@ function getApiBaseUrl() {
     const RENDER_SERVER_URL = "https://bariosk.onrender.com";
 
     // 네트워크 연결이 없는 경우 로컬 스토리지 모드로 변경
-    if (!checkNetworkConnection()) {
+    if (!isOnline) {
         console.log(
             "네트워크 연결이 없습니다. 로컬 스토리지 모드로 작동합니다."
         );
@@ -157,7 +223,7 @@ async function apiRequest(endpoint, options = {}) {
     };
 
     try {
-        const API_BASE_URL = getApiBaseUrl();
+        const API_BASE_URL = await getApiBaseUrl();
         const timestamp = Date.now();
         const device = isMobileDevice() ? 'mobile' : 'pc';
         const randomId = Math.random().toString(36).substring(7);
@@ -379,7 +445,9 @@ async function initializeApp() {
 async function loadServerData(isInitialLoad = true) {
     console.log("=== 서버 데이터 로드 시작 ===");
     console.log("디바이스:", isMobileDevice() ? "모바일" : "PC");
-    console.log("네트워크 상태:", checkNetworkConnection() ? "연결됨" : "연결 안됨");
+    
+    const isOnline = await checkNetworkConnection();
+    console.log("네트워크 상태:", isOnline ? "연결됨" : "연결 안됨");
     
     try {
         // 메뉴 데이터 로드
@@ -1393,11 +1461,43 @@ function synchronizeDataWithServer() {
     });
 }
 
+// 모바일 네트워크 연결 간단 테스트
+async function testMobileConnection() {
+    if (!isMobileDevice()) return true;
+    
+    try {
+        console.log("모바일 연결 간단 테스트 시작");
+        
+        // 간단한 fetch 테스트
+        const response = await fetch('https://bariosk.onrender.com/api/menu', {
+            method: 'HEAD',
+            mode: 'cors',
+            cache: 'no-cache'
+        });
+        
+        console.log("모바일 연결 테스트 성공");
+        return true;
+        
+    } catch (error) {
+        console.log("모바일 연결 테스트 실패:", error.message);
+        return false;
+    }
+}
+
 // 강제 새로고침 함수 (모바일/PC 데이터 동기화용)
 async function forceRefreshData() {
     console.log("=== 강제 새로고침 시작 ===");
     
     try {
+        // 모바일에서 연결 테스트
+        if (isMobileDevice()) {
+            const isConnected = await testMobileConnection();
+            if (!isConnected) {
+                showNetworkMessage("모바일에서 서버 연결에 실패했습니다. 인터넷 연결을 확인해주세요.");
+                return;
+            }
+        }
+        
         // 로컬 스토리지 캐시 클리어
         localStorage.removeItem("bariosk_menu_data");
         localStorage.removeItem("bariosk_menu_data_time");
@@ -1431,6 +1531,13 @@ async function forceRefreshData() {
 function showOfflineNotification() {
     console.log("오프라인 모드로 전환");
     showNetworkMessage("네트워크 연결이 없습니다. 오프라인 모드로 작동합니다.");
+    
+    // 모바일에서 추가 안내
+    if (isMobileDevice()) {
+        setTimeout(() => {
+            showNetworkMessage("모바일에서 새로고침 버튼을 눌러 연결을 다시 시도해보세요.");
+        }, 3000);
+    }
 }
 
 // 네트워크 메시지 표시 함수
